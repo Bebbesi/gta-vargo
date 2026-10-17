@@ -28,6 +28,7 @@ func begin() -> void:
 
 func update(delta: float) -> void:
 	blips = []
+	Enemy.assign_attackers(enemies, world.player_pos(), 2)
 	for e in enemies:
 		if is_instance_valid(e) and not e.dead:
 			blips.append({"pos": e.global_position, "color": Color(0.95, 0.2, 0.2), "label": "", "kind": "enemy"})
@@ -76,7 +77,7 @@ func _start_wave() -> void:
 		var pos: Vector3 = SPAWNS[i % SPAWNS.size()] + Vector3(randf_range(-1.5, 1.5), 0, randf_range(-1.0, 1.0))
 		var e: Enemy = world.spawn_enemy("boss" if boss else "viper", pos, 170.0 if boss else 50.0 + wave * 6.0, "Grosso Sal" if boss else "")
 		e.boss = boss
-		e.damage = 12.0 if boss else 6.0 + wave
+		e.damage = 11.0 if boss else 5.0 + wave
 		e.speed = 4.6 if boss else randf_range(4.8, 5.6)
 		e.drop_boost = 0.25
 		track(e)

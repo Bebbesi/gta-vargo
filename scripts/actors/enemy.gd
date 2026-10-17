@@ -14,7 +14,9 @@ var drop_boost := 0.3
 var boss := false
 var remove_on_defeat := true
 var dead_time := 0.0
+var engage := true
 var label: Label3D
+var _orbit := 1.0
 
 
 func setup(w: Node, look_id: String, hp: float = 60.0, title: String = "") -> void:
@@ -23,6 +25,7 @@ func setup(w: Node, look_id: String, hp: float = 60.0, title: String = "") -> vo
 	health = hp
 	setup_body(Game.NPC_LOOKS.get(look_id, Game.NPC_LOOKS["viper"]))
 	add_to_group("enemies")
+	_orbit = 1.0 if randf() < 0.5 else -1.0
 	if title != "":
 		label = Gfx.label3d(self, title, Vector3(0, 2.6, 0), 48, Color(1.0, 0.5, 0.9))
 
@@ -50,6 +53,17 @@ func _physics_process(delta: float) -> void:
 			_strike(target)
 	elif stagger > 0.0:
 		stagger -= delta
+	elif not engage:
+		# In attesa del proprio turno: gira attorno al bersaglio a distanza.
+		var radial := to / maxf(dist, 0.001)
+		var side := radial.cross(Vector3.UP) * _orbit
+		var push := 0.0
+		if dist < 4.0:
+			push = -1.0
+		elif dist > 6.5:
+			push = 1.0
+		dir = (radial * push + side * 0.6).normalized() * speed * 0.6
+		face_dir(to, delta, 8.0)
 	elif dist > 1.45:
 		dir = to / maxf(dist, 0.001) * speed
 		face_dir(to, delta, 10.0)
@@ -61,6 +75,17 @@ func _physics_process(delta: float) -> void:
 			model.play_punch()
 	move_body(delta, dir)
 	model.animate(delta, dir.length() / 8.0, is_on_floor())
+
+
+## Solo i `max_attackers` nemici più vicini attaccano, gli altri attendono.
+static func assign_attackers(list: Array, center: Vector3, max_attackers: int) -> void:
+	var alive: Array = []
+	for e in list:
+		if is_instance_valid(e) and not e.dead:
+			alive.append(e)
+	alive.sort_custom(func(a, b): return a.global_position.distance_squared_to(center) < b.global_position.distance_squared_to(center))
+	for i in alive.size():
+		alive[i].engage = i < max_attackers or alive[i].boss
 
 
 func _strike(target: Node3D) -> void:

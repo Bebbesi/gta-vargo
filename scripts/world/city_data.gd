@@ -152,13 +152,19 @@ static func _link(a: int, b: int) -> void:
 	links[b].append(a)
 
 
+static var _edges_cache: Array = []
+
+
 static func edges() -> Array:
 	ensure_graph()
+	if not _edges_cache.is_empty():
+		return _edges_cache
 	var out := []
 	for a in nodes.size():
 		for b in links[a]:
 			if b > a:
 				out.append([nodes[a], nodes[b]])
+	_edges_cache = out
 	return out
 
 

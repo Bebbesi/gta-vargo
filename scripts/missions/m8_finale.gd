@@ -65,6 +65,7 @@ func update(delta: float) -> void:
 			if not is_instance_valid(dex_car) or dex_car.wrecked or chase_t > 150.0:
 				_dex_on_foot()
 		2:
+			Enemy.assign_attackers(guards + [dex], world.player_pos(), 2)
 			var alive := 0
 			for g in guards:
 				if is_instance_valid(g) and not g.dead:
