@@ -1,0 +1,265 @@
+name: Android build & release
+
+# Compila "GTA: Three Legends" con Godot 4.4.1, esegue i test automatici,
+# esporta un APK firmato e lo pubblica come asset della GitHub Release.
+#  - push su qualsiasi branch / pull request: build + test + APK come artifact
+#  - push sul branch predefinito, tag v* o avvio manuale: anche Release + APK
+
+on:
+  push:
+    branches: ["**"]
+    tags: ["v*"]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: android-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  GODOT_VERSION: "4.4.1"
+  GODOT_STATUS: "stable"
+
+jobs:
+  build:
+    name: Build APK
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    outputs:
+      version: ${{ steps.meta.outputs.version }}
+      apk: ${{ steps.meta.outputs.apk }}
+      signing: ${{ steps.keys.outputs.signing }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Versione del gioco
+        id: meta
+        run: |
+          VERSION=$(grep -oP '^config/version="\K[^"]+' project.godot)
+          test -n "$VERSION"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "apk=GTA_Three_Legends-v$VERSION.apk" >> "$GITHUB_OUTPUT"
+          echo "Versione: $VERSION"
+
+      - name: Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Cache di Godot e dei template di export
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/godot
+            ~/.local/share/godot/export_templates
+          key: godot-${{ env.GODOT_VERSION }}-${{ env.GODOT_STATUS }}-android-v1
+
+      - name: Scarica Godot e i template Android
+        run: |
+          set -euo pipefail
+          BASE="https://github.com/godotengine/godot/releases/download/${GODOT_VERSION}-${GODOT_STATUS}"
+          if [ ! -x "$HOME/godot/godot" ]; then
+            mkdir -p "$HOME/godot"
+            curl -fsSL --retry 4 -o /tmp/godot.zip "$BASE/Godot_v${GODOT_VERSION}-${GODOT_STATUS}_linux.x86_64.zip"
+            unzip -q /tmp/godot.zip -d "$HOME/godot"
+            mv "$HOME/godot/Godot_v${GODOT_VERSION}-${GODOT_STATUS}_linux.x86_64" "$HOME/godot/godot"
+            rm /tmp/godot.zip
+          fi
+          TPL="$HOME/.local/share/godot/export_templates/${GODOT_VERSION}.${GODOT_STATUS}"
+          if [ ! -s "$TPL/android_release.apk" ]; then
+            mkdir -p "$TPL"
+            curl -fsSL --retry 4 -o /tmp/templates.tpz "$BASE/Godot_v${GODOT_VERSION}-${GODOT_STATUS}_export_templates.tpz"
+            unzip -q -j /tmp/templates.tpz templates/android_release.apk templates/android_debug.apk templates/version.txt -d "$TPL"
+            rm /tmp/templates.tpz
+          fi
+          "$HOME/godot/godot" --version
+          ls -la "$TPL"
+
+      - name: Configura Android SDK
+        run: |
+          set -euo pipefail
+          SDK="${ANDROID_HOME:-${ANDROID_SDK_ROOT:-/usr/local/lib/android/sdk}}"
+          SDKM="$SDK/cmdline-tools/latest/bin/sdkmanager"
+          yes | "$SDKM" --licenses > /dev/null || true
+          "$SDKM" "platform-tools" "build-tools;34.0.0" > /dev/null
+          ls "$SDK/build-tools"
+          echo "ANDROID_SDK=$SDK" >> "$GITHUB_ENV"
+
+      - name: Prepara le chiavi di firma
+        id: keys
+        env:
+          KEYSTORE_B64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          KEYSTORE_ALIAS: ${{ secrets.ANDROID_KEYSTORE_ALIAS }}
+          KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+        run: |
+          set -euo pipefail
+          KEYS="$RUNNER_TEMP/keys"
+          mkdir -p "$KEYS"
+          # Keystore di debug (richiesto dall'editor anche per l'export release).
+          keytool -genkeypair -keystore "$KEYS/debug.keystore" -storepass android -keypass android \
+            -alias androiddebugkey -keyalg RSA -keysize 2048 -validity 10000 \
+            -dname "CN=Android Debug,O=Android,C=US" > /dev/null 2>&1
+          if [ -n "$KEYSTORE_B64" ] && [ -n "$KEYSTORE_ALIAS" ] && [ -n "$KEYSTORE_PASSWORD" ]; then
+            echo "$KEYSTORE_B64" | base64 -d > "$KEYS/release.keystore"
+            echo "GODOT_ANDROID_KEYSTORE_RELEASE_PATH=$KEYS/release.keystore" >> "$GITHUB_ENV"
+            echo "GODOT_ANDROID_KEYSTORE_RELEASE_USER=$KEYSTORE_ALIAS" >> "$GITHUB_ENV"
+            echo "GODOT_ANDROID_KEYSTORE_RELEASE_PASSWORD=$KEYSTORE_PASSWORD" >> "$GITHUB_ENV"
+            echo "signing=release" >> "$GITHUB_OUTPUT"
+            echo "Firma con la chiave di release dai secrets del repository."
+          else
+            echo "::warning title=Firma di test::Secrets ANDROID_KEYSTORE_* assenti: l'APK viene firmato con una chiave di TEST generata ora (installabile, ma non adatta al Play Store)."
+            PASS=$(openssl rand -hex 16)
+            echo "::add-mask::$PASS"
+            keytool -genkeypair -keystore "$KEYS/test-release.keystore" -storepass "$PASS" -keypass "$PASS" \
+              -alias threelegends -keyalg RSA -keysize 2048 -validity 10000 \
+              -dname "CN=GTA Three Legends (chiave di test),O=Build CI,C=IT" > /dev/null 2>&1
+            echo "GODOT_ANDROID_KEYSTORE_RELEASE_PATH=$KEYS/test-release.keystore" >> "$GITHUB_ENV"
+            echo "GODOT_ANDROID_KEYSTORE_RELEASE_USER=threelegends" >> "$GITHUB_ENV"
+            echo "GODOT_ANDROID_KEYSTORE_RELEASE_PASSWORD=$PASS" >> "$GITHUB_ENV"
+            echo "signing=test" >> "$GITHUB_OUTPUT"
+          fi
+          mkdir -p "$HOME/.config/godot"
+          cat > "$HOME/.config/godot/editor_settings-4.4.tres" <<EOF
+          [gd_resource type="EditorSettings" format=3]
+
+          [resource]
+          export/android/android_sdk_path = "$ANDROID_SDK"
+          export/android/java_sdk_path = "$JAVA_HOME"
+          export/android/debug_keystore = "$KEYS/debug.keystore"
+          export/android/debug_keystore_user = "androiddebugkey"
+          export/android/debug_keystore_pass = "android"
+          EOF
+          sed -i 's/^          //' "$HOME/.config/godot/editor_settings-4.4.tres"
+
+      - name: Importa il progetto
+        run: |
+          "$HOME/godot/godot" --headless --path . --import 2>&1 | tail -n 5
+
+      - name: Test automatici (missioni, guida, salute, salvataggi, touch)
+        run: |
+          set -o pipefail
+          "$HOME/godot/godot" --headless --fixed-fps 60 --path . -- --run-tests 2>&1 | tee test-report.txt
+          grep -q "0 falliti" test-report.txt
+
+      - name: Esporta l'APK di release
+        run: |
+          set -o pipefail
+          mkdir -p build
+          "$HOME/godot/godot" --headless --path . --export-release "Android" "build/${{ steps.meta.outputs.apk }}" 2>&1 \
+            | grep -v -E "^\s*(ADDING|update_|reimport|first_scan)" | tail -n 30
+
+      - name: Verifica l'APK
+        run: |
+          set -euo pipefail
+          APK="build/${{ steps.meta.outputs.apk }}"
+          if [ ! -s "$APK" ]; then echo "::error::APK non generato o vuoto"; exit 1; fi
+          SIZE=$(stat -c%s "$APK")
+          echo "Dimensione APK: $SIZE byte"
+          if [ "$SIZE" -lt 10000000 ]; then echo "::error::APK sospettosamente piccolo"; exit 1; fi
+          APKSIGNER=$(ls -d "$ANDROID_SDK"/build-tools/*/ | sort -V | tail -n 1)apksigner
+          "$APKSIGNER" verify --verbose "$APK" | head -n 6
+          unzip -l "$APK" | grep -q "lib/arm64-v8a/libgodot_android.so"
+          unzip -l "$APK" | grep -q "assets/scripts/main.gdc"
+          AAPT=$(ls -d "$ANDROID_SDK"/build-tools/*/ | sort -V | tail -n 1)aapt
+          if [ -x "$AAPT" ]; then "$AAPT" dump badging "$APK" | grep -E "^(package|sdkVersion|targetSdkVersion|native-code|launchable)"; fi
+          rm -f build/*.idsig
+          (cd build && sha256sum "$(basename "$APK")" > "$(basename "$APK").sha256")
+          cat build/*.sha256
+
+      - name: Carica l'APK come artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: GTA_Three_Legends-apk
+          path: |
+            build/*.apk
+            build/*.sha256
+            test-report.txt
+          if-no-files-found: error
+          retention-days: 30
+
+  release:
+    name: Pubblica la GitHub Release
+    needs: build
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      startsWith(github.ref, 'refs/tags/v') ||
+      (github.event_name == 'push' && github.ref_name == github.event.repository.default_branch)
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - name: Scarica l'APK
+        uses: actions/download-artifact@v4
+        with:
+          name: GTA_Three_Legends-apk
+          path: dist
+
+      - name: Crea o aggiorna la release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+          VERSION: ${{ needs.build.outputs.version }}
+          APK: ${{ needs.build.outputs.apk }}
+          SIGNING: ${{ needs.build.outputs.signing }}
+        run: |
+          set -euo pipefail
+          TAG="v$VERSION"
+          if [ "$SIGNING" = "release" ]; then
+            FIRMA="Firmato con la chiave di release del progetto."
+          else
+            FIRMA="Firmato con una chiave di TEST generata in CI (installabile; per aggiornare una versione precedente può servire disinstallarla prima)."
+          fi
+          cat > notes.md <<EOF
+          ## GTA: Three Legends $TAG
+
+          Mini open world 3D per Android con **Mike Vargo**, **Tom Pearl** e **Norman Summerton**.
+
+          - 8 missioni della storia "La valigetta del Corvo", che inizia in volo
+          - Città esplorabile con traffico, pedoni, porto e aeroporto
+          - Auto guidabili, cambio protagonista, Brown Boost, salvataggi locali
+          - Comandi touch, orientamento orizzontale, nessuna connessione richiesta
+
+          **Download:** [$APK](https://github.com/$REPO/releases/download/$TAG/$APK)
+
+          Installazione: scarica l'APK sul telefono, consenti "Installa app sconosciute" e aprilo.
+          $FIRMA
+
+          Build: commit ${GITHUB_SHA::7}, Godot ${GODOT_VERSION}, test automatici superati.
+          EOF
+          sed -i 's/^          //' notes.md
+          if gh release view "$TAG" --repo "$REPO" > /dev/null 2>&1; then
+            gh api -X PATCH "repos/$REPO/git/refs/tags/$TAG" -f sha="$GITHUB_SHA" -F force=true > /dev/null || true
+            gh release edit "$TAG" --repo "$REPO" --notes-file notes.md --title "GTA: Three Legends $TAG"
+          else
+            gh release create "$TAG" --repo "$REPO" --target "$GITHUB_SHA" --title "GTA: Three Legends $TAG" --notes-file notes.md
+          fi
+          gh release upload "$TAG" --repo "$REPO" --clobber "dist/build/$APK" "dist/build/$APK.sha256"
+
+      - name: Verifica che l'APK sia nella release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+          VERSION: ${{ needs.build.outputs.version }}
+          APK: ${{ needs.build.outputs.apk }}
+        run: |
+          set -euo pipefail
+          TAG="v$VERSION"
+          SIZE=$(gh release view "$TAG" --repo "$REPO" --json assets --jq ".assets[] | select(.name == \"$APK\") | .size")
+          if [ -z "$SIZE" ] || [ "$SIZE" -lt 10000000 ]; then
+            echo "::error::L'APK non risulta allegato alla release $TAG"; exit 1
+          fi
+          URL="https://github.com/$REPO/releases/tag/$TAG"
+          DL="https://github.com/$REPO/releases/download/$TAG/$APK"
+          curl -fsSIL -o /dev/null -w "Download HTTP %{http_code}\n" "$DL"
+          {
+            echo "### Release pubblicata"
+            echo "- Release: $URL"
+            echo "- APK ($SIZE byte): $DL"
+          } >> "$GITHUB_STEP_SUMMARY"
+          echo "Release: $URL"
+          echo "APK: $DL"
