@@ -165,3 +165,39 @@ static func plane(parent: Node, small: bool = false) -> Node3D:
 	cs2.position = Vector3(0, wing_y, -1.0 * s)
 	body.add_child(cs2)
 	return root
+
+
+static func shop_marker(parent: Node, pos: Vector3) -> Node3D:
+	var root := Node3D.new()
+	root.name = "ShopMarker"
+	parent.add_child(root)
+	root.global_position = pos
+	var disc := MeshInstance3D.new()
+	var cm := CylinderMesh.new()
+	cm.top_radius = 1.2
+	cm.bottom_radius = 1.2
+	cm.height = 0.08
+	cm.radial_segments = 16
+	disc.mesh = cm
+	disc.material_override = Gfx.mat(Color(1.0, 0.55, 0.15, 0.6), 1.0, true)
+	disc.position.y = 0.1
+	root.add_child(disc)
+	Gfx.label3d(root, "$ ARMI", Vector3(0, 1.7, 0), 60, Color(1.0, 0.65, 0.25))
+	return root
+
+
+## Indicatore rosso sopra il bersaglio della mira automatica.
+static func aim_marker(parent: Node) -> Node3D:
+	var root := Node3D.new()
+	root.name = "AimMarker"
+	parent.add_child(root)
+	var mi := MeshInstance3D.new()
+	mi.mesh = Gfx.box_mesh(Vector3(0.32, 0.32, 0.32))
+	var m := Gfx.mat(Color(1.0, 0.15, 0.1, 0.9), 2.0, true).duplicate() as StandardMaterial3D
+	m.no_depth_test = true
+	mi.material_override = m
+	mi.rotation = Vector3(deg_to_rad(45), 0, deg_to_rad(45))
+	mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	root.add_child(mi)
+	root.visible = false
+	return root

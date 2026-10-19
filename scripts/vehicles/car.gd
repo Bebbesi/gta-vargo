@@ -17,6 +17,8 @@ const TYPES := {
 	"muscle": {"name": "Bruto", "speed": 40.0, "accel": 15.0, "steer": 1.9, "grip": 4.6, "health": 170.0, "size": Vector3(2.0, 1.28, 4.6)},
 	"viper": {"name": "Vipera", "speed": 38.0, "accel": 14.0, "steer": 2.0, "grip": 6.0, "health": 170.0, "size": Vector3(2.0, 1.3, 4.6)},
 	"luxury": {"name": "Regale", "speed": 31.0, "accel": 11.0, "steer": 1.9, "grip": 6.0, "health": 180.0, "size": Vector3(2.0, 1.38, 4.9)},
+	"police": {"name": "Pattuglia", "speed": 41.0, "accel": 15.5, "steer": 2.2, "grip": 6.8, "health": 190.0, "size": Vector3(2.0, 1.42, 4.6)},
+	"swat": {"name": "Blindato SWAT", "speed": 33.0, "accel": 11.0, "steer": 1.8, "grip": 6.0, "health": 320.0, "size": Vector3(2.3, 2.4, 5.4)},
 }
 const COLORS := [
 	Color(0.85, 0.15, 0.12), Color(0.15, 0.35, 0.75), Color(0.95, 0.95, 0.95), Color(0.1, 0.1, 0.12),
@@ -66,6 +68,12 @@ var nitro := 0.0
 var push_vel := Vector3.ZERO
 var impact_cd := 0.0
 var horn_cd := 0.0
+var last_hit_by: Node = null
+## Multiplayer: indice condiviso dell'auto e peer che la sta guidando da remoto.
+var net_id := -1
+var remote_driver := 0
+var _net_pos := Vector3.ZERO
+var _net_yaw := 0.0
 
 
 func setup(type: String, color: Color, w: Node) -> void:
@@ -107,6 +115,9 @@ func forward() -> Vector3:
 func _physics_process(delta: float) -> void:
 	impact_cd = maxf(0.0, impact_cd - delta)
 	horn_cd -= delta
+	if remote_driver != 0:
+		_remote_follow(delta)
+		return
 	if wrecked:
 		speed = move_toward(speed, 0.0, 25.0 * delta)
 		throttle = 0.0
@@ -225,6 +236,8 @@ func take_damage(amount: float, by: Node = null) -> void:
 	if wrecked or amount <= 0.0:
 		return
 	health -= amount * damage_taken_mult
+	if by != null:
+		last_hit_by = by
 	damaged.emit(amount, by)
 	model.set_damage(1.0 - health / max_health)
 	if health <= 0.0:
@@ -234,6 +247,8 @@ func take_damage(amount: float, by: Node = null) -> void:
 func wreck() -> void:
 	if wrecked:
 		return
+	if world.is_player_source(last_hit_by) and driver == null:
+		world.report_crime("cop_car_destroyed" if car_type in ["police", "swat"] else "car_destroyed", global_position)
 	wrecked = true
 	health = 0.0
 	model.set_wrecked()
@@ -249,6 +264,27 @@ func wreck() -> void:
 	destroyed.emit(self)
 
 
+## Proiettile: danneggia l'auto e in parte chi è al volante.
+func take_bullet(amount: float, source: Node, _dir: Vector3) -> void:
+	Gfx.burst(world, global_position + Vector3(0, size.y * 0.6, 0), Color(1.0, 0.9, 0.6), 5, 3.0, 0.06, 0.3)
+	take_damage(amount * 0.4, source)
+	if driver != null:
+		driver.take_damage(amount * 0.3, source)
+	elif remote_driver != 0 and world.mp and world.net != null:
+		world.net.hit_player(remote_driver, amount * 0.3, "shot")
+
+
+## Nuova vernice (riverniciatura al garage): ricostruisce il modello.
+func repaint(c: Color) -> void:
+	var had_driver := model.driver_head.visible
+	model.queue_free()
+	model = CarModel.new()
+	add_child(model)
+	model.build(car_type, c, size)
+	model.set_driver(had_driver)
+	repair()
+
+
 func repair() -> void:
 	wrecked = false
 	health = max_health
@@ -259,6 +295,27 @@ func repair() -> void:
 	velocity = Vector3.ZERO
 
 
+# ---------------------------------------------------------------- multiplayer
+
+## Stato ricevuto dalla rete per un'auto guidata da un altro giocatore.
+func apply_net_state(pos: Vector3, yaw: float, spd: float, st: float) -> void:
+	_net_pos = pos
+	_net_yaw = yaw
+	speed = spd
+	steer = st
+
+
+func _remote_follow(delta: float) -> void:
+	var k := clampf(delta * 12.0, 0.0, 1.0)
+	if global_position.distance_to(_net_pos) > 12.0:
+		global_position = _net_pos
+	else:
+		global_position = global_position.lerp(_net_pos, k)
+	rotation.y = lerp_angle(rotation.y, _net_yaw, k)
+	velocity = Vector3.ZERO
+	model.update_visuals(delta, speed, steer)
+
+
 func start_nitro(t: float) -> void:
 	nitro = t
 	model.set_nitro(true)
@@ -267,6 +324,11 @@ func start_nitro(t: float) -> void:
 func _hit_actors() -> void:
 	var spd := absf(speed)
 	var inv := global_transform.basis.inverse()
+	if world.mp and driver != null and driver == world.player:
+		for av in get_tree().get_nodes_in_group("net_avatars"):
+			var lr: Vector3 = inv * (av.global_position - global_position)
+			if absf(lr.x) < size.x * 0.5 + 0.4 and absf(lr.z) < size.z * 0.5 + 0.4 and absf(lr.y) < 2.0:
+				av.net_hit(spd * 1.3, "car")
 	for a in get_tree().get_nodes_in_group("actors"):
 		var actor := a as Actor
 		if actor == null or actor.dead or actor.down_time > 0.0 or actor.in_vehicle():

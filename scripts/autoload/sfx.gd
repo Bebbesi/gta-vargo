@@ -10,6 +10,8 @@ var _pool: Array[AudioStreamPlayer] = []
 var _pool_index := 0
 var music_player: AudioStreamPlayer
 var engine_player: AudioStreamPlayer
+var siren_player: AudioStreamPlayer
+var heli_player: AudioStreamPlayer
 var _music_stream: AudioStreamWAV
 var _music_task := -1
 var _want_music := false
@@ -31,8 +33,16 @@ func _ready() -> void:
 	engine_player.bus = "SFX"
 	engine_player.volume_db = -14.0
 	add_child(engine_player)
+	siren_player = AudioStreamPlayer.new()
+	siren_player.bus = "SFX"
+	add_child(siren_player)
+	heli_player = AudioStreamPlayer.new()
+	heli_player.bus = "SFX"
+	add_child(heli_player)
 	_build_sounds()
 	engine_player.stream = _streams["engine"]
+	siren_player.stream = _streams["siren"]
+	heli_player.stream = _streams["heli"]
 	Game.apply_settings()
 	if not Game.test_mode:
 		_music_task = WorkerThreadPool.add_task(_build_music)
@@ -107,6 +117,25 @@ func set_engine(on: bool, speed_ratio: float = 0.0) -> void:
 		engine_player.volume_db = -16.0 + clampf(speed_ratio, 0.0, 1.0) * 6.0
 	elif engine_player.playing:
 		engine_player.stop()
+
+
+## Sirena della polizia: `volume` 0..1 in base alla distanza della pattuglia più vicina.
+func set_siren(volume: float) -> void:
+	_loop(siren_player, volume, -22.0, -8.0)
+
+
+func set_heli(volume: float) -> void:
+	_loop(heli_player, volume, -24.0, -6.0)
+
+
+func _loop(p: AudioStreamPlayer, volume: float, min_db: float, max_db: float) -> void:
+	if volume <= 0.01:
+		if p.playing:
+			p.stop()
+		return
+	p.volume_db = lerpf(min_db, max_db, clampf(volume, 0.0, 1.0))
+	if not p.playing:
+		p.play()
 
 
 # ---------------------------------------------------------------- sintesi
@@ -222,6 +251,43 @@ func _build_sounds() -> void:
 	_streams["cash"] = _wav(_notes([1568.0, 2093.0], 0.05, "square", 0.2, 0.15))
 	_streams["feather"] = _wav(_notes([784.0, 988.0, 1175.0, 1568.0], 0.06, "tri", 0.35, 0.3))
 	_streams["engine"] = _wav(_engine_loop(), RATE, true)
+	_streams["pistol"] = _wav(_mix(_noise(0.22, 0.9, 0.6, 18.0, 0.8), _sweep(900.0, 200.0, 0.06, "square", 0.2)))
+	_streams["smg"] = _wav(_mix(_noise(0.11, 0.8, 0.7, 30.0, 0.5), _sweep(1200.0, 300.0, 0.04, "square", 0.15)))
+	_streams["shotgun"] = _wav(_noise(0.45, 1.0, 0.3, 8.0, 1.0))
+	_streams["rifle"] = _wav(_mix(_noise(0.16, 0.9, 0.55, 22.0, 0.7), _sweep(700.0, 150.0, 0.05, "saw", 0.2)))
+	_streams["empty"] = _wav(_notes([2200.0], 0.02, "square", 0.2))
+	_streams["reload"] = _wav(_mix(_notes([800.0], 0.03, "square", 0.15), _noise(0.12, 0.4, 0.4, 30.0, 0.0)))
+	_streams["busted"] = _wav(_notes([523.0, 392.0, 330.0, 262.0], 0.18, "square", 0.25, 0.4))
+	_streams["siren"] = _wav(_siren_loop(), RATE, true)
+	_streams["heli"] = _wav(_heli_loop(), RATE, true)
+
+
+func _siren_loop() -> PackedFloat32Array:
+	# Sirena bitonale (700/950 Hz), 1,2 s in loop.
+	var total := int(1.2 * RATE)
+	var out := PackedFloat32Array()
+	out.resize(total)
+	var phase := 0.0
+	for i in total:
+		var t := float(i) / RATE
+		var f := 700.0 if t < 0.6 else 950.0
+		phase += f / RATE
+		out[i] = (_osc("tri", phase) * 0.7 + _osc("square", phase) * 0.15) * 0.45
+	return out
+
+
+func _heli_loop() -> PackedFloat32Array:
+	# Pale del rotore: colpi di rumore filtrato a 11 Hz.
+	var total := RATE
+	var out := PackedFloat32Array()
+	out.resize(total)
+	var lp := 0.0
+	for i in total:
+		var t := float(i) / RATE
+		var beat := fmod(t * 11.0, 1.0)
+		lp += (randf_range(-1.0, 1.0) - lp) * 0.12
+		out[i] = (lp * 0.9 * exp(-beat * 6.0) + sin(TAU * 60.0 * t) * 0.15) * 0.8
+	return out
 
 
 func _engine_loop() -> PackedFloat32Array:

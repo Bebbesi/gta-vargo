@@ -1,7 +1,8 @@
 class_name World
 extends Node3D
 ## Il mondo di gioco: costruisce la città, gestisce protagonisti, veicoli,
-## traffico, pedoni, oggetti, salvataggi, morte/respawn e cambio personaggio.
+## traffico, pedoni, oggetti, armi, polizia, salvataggi, morte/respawn,
+## cambio personaggio e (in modalità multiplayer) la sessione di rete.
 
 const PARKED := [
 	["sedan", Vector3(75, 0, -160), 0.0], ["muscle", Vector3(87, 0, -160), 0.0], ["taxi", Vector3(99, 0, -160), 0.0],
@@ -10,6 +11,11 @@ const PARKED := [
 	["sedan", Vector3(205, 0, -88), 0.0], ["taxi", Vector3(217, 0, -88), 0.0], ["luxury", Vector3(211, 0, -72), PI],
 	["sedan", Vector3(54.0, 0, -30), PI], ["taxi", Vector3(126.0, 0, 30), 0.0], ["van", Vector3(-114.0, 0, -30), 0.0],
 	["sedan", Vector3(-6.0, 0, 150), PI], ["muscle", Vector3(30, 0, -54.0), -PI * 0.5], ["sport", Vector3(-66.0, 0, 40), PI],
+	["police", Vector3(142, 0, -18), PI], ["police", Vector3(158, 0, -18), PI],
+]
+const MP_SPAWNS := [
+	Vector3(8.6, 0, -40), Vector3(-51.4, 0, 30), Vector3(128.6, 0, -30), Vector3(-90, 0, -128.6),
+	Vector3(51.4, 0, 90), Vector3(-128.6, 0, 60), Vector3(90, 0, -51.4), Vector3(-8.6, 0, 150),
 ]
 const TRAFFIC_TYPES := ["sedan", "sedan", "taxi", "van", "muscle", "sport", "sedan", "luxury", "taxi"]
 
@@ -45,6 +51,15 @@ var _save_cd := 0.0
 var _tom_reveal := 0.0
 var _target_traffic := 10
 var view_range := 270.0
+var police: Police
+var mp := false
+var net: Node = null
+var aim_marker: Node3D
+var armory_marker: Node3D
+var _aim_target: Node3D = null
+var _aim_t := 0.0
+var _armory_cd := 0.0
+var _spray_cd := 0.0
 
 const FOG_COLOR := Color(0.7, 0.78, 0.88)
 
@@ -65,15 +80,30 @@ func build() -> void:
 	jet = Props.plane(self, true)
 	jet.global_position = CityData.JET
 	gus = Props.npc(self, "gus", CityData.GUS_POS, -PI * 0.5, "Gus")
+	mp = not Game.pending_mp.is_empty()
 	save_marker = Props.save_marker(self, CityData.SAVE_POINT)
+	save_marker.visible = not mp
+	armory_marker = Props.shop_marker(self, CityData.ARMORY_POS)
+	armory_marker.visible = not mp
+	aim_marker = Props.aim_marker(self)
 	_spawn_protagonists()
-	_target_traffic = [6, 10, 14][clampi(int(Game.settings["quality"]), 0, 2)]
-	for p in PARKED:
-		spawn_car(p[0], p[1], p[2])
+	_target_traffic = 0 if mp else [6, 10, 14][clampi(int(Game.settings["quality"]), 0, 2)]
+	for i in PARKED.size():
+		var pc: Array = PARKED[i]
+		var car := spawn_car(pc[0], pc[1], pc[2])
+		car.net_id = i
+		if mp:
+			car.damage_taken_mult = 0.0
 	for i in _target_traffic:
 		_add_traffic_car(0.0)
-	_spawn_peds()
+	if not mp:
+		_spawn_peds()
 	_spawn_pickups()
+	police = Police.new()
+	police.world = self
+	police.name = "Police"
+	add_child(police)
+	Game.weapon_changed.connect(_on_weapon_changed)
 	missions = MissionManager.new()
 	missions.world = self
 	add_child(missions)
@@ -142,18 +172,23 @@ func set_view_range(far: float) -> void:
 # ---------------------------------------------------------------- spawn
 
 func _spawn_protagonists() -> void:
-	for id in Game.CHAR_ORDER:
+	var ids: Array = Game.CHAR_ORDER
+	if mp:
+		ids = [str(Game.pending_mp.get("char", "mike"))]
+	for id in ids:
 		var p := Protagonist.new()
 		p.setup(id, self)
 		add_child(p)
 		chars[id] = p
-	player = chars["mike"]
+	player = chars[ids[0]]
 	player.active = true
 	place_trio_at_safehouse()
 
 
 func place_trio_at_safehouse() -> void:
 	var spots := {"mike": Vector3(150, 0, -137), "tom": Vector3(146.5, 0, -139.5), "norman": Vector3(153.5, 0, -139.5)}
+	if mp:
+		return
 	for id in chars:
 		var p: Protagonist = chars[id]
 		if p.in_vehicle():
@@ -179,6 +214,10 @@ func spawn_car(type: String, pos: Vector3, yaw: float, color: Variant = null) ->
 		c = Color(0.98, 0.8, 0.12)
 	elif type == "viper":
 		c = Color(0.1, 0.1, 0.12)
+	elif type == "police":
+		c = Color(0.95, 0.95, 0.97)
+	elif type == "swat":
+		c = Color(0.12, 0.13, 0.18)
 	car.setup(type, c, self)
 	add_child(car)
 	car.global_position = pos + Vector3(0, 0.05, 0)
@@ -316,6 +355,10 @@ func alert_peds(pos: Vector3, r: float) -> void:
 func _spawn_pickups() -> void:
 	for p in CityData.BOOST_SPOTS:
 		spawn_pickup("boost", p, 45.0)
+	for w in CityData.WEAPON_SPOTS:
+		spawn_pickup("weapon", w[1], 60.0, w[0])
+	if mp:
+		return
 	for i in CityData.FEATHER_SPOTS.size():
 		var f := spawn_pickup("feather", CityData.FEATHER_SPOTS[i], 0.0)
 		f.id = str(i)
@@ -323,9 +366,9 @@ func _spawn_pickups() -> void:
 		feathers.append(f)
 
 
-func spawn_pickup(kind: String, pos: Vector3, respawn_time: float = 0.0) -> Pickup:
+func spawn_pickup(kind: String, pos: Vector3, respawn_time: float = 0.0, sub: String = "") -> Pickup:
 	var p := Pickup.new()
-	p.setup(self, kind, respawn_time)
+	p.setup(self, kind, respawn_time, sub)
 	add_child(p)
 	p.global_position = pos
 	return p
@@ -364,7 +407,8 @@ func _on_feather(p: Pickup) -> void:
 # ---------------------------------------------------------------- stato di gioco
 
 func can_control() -> bool:
-	return state == "play" and lock_count == 0 and player != null and not player.dead and not get_tree().paused
+	return state == "play" and lock_count == 0 and player != null and not player.dead and not get_tree().paused \
+		and not (mp and hud != null and hud.is_menu_open())
 
 
 func player_pos() -> Vector3:
@@ -503,12 +547,16 @@ func _process(delta: float) -> void:
 				if is_instance_valid(f):
 					f.revealed = false
 	_traffic_timer -= delta
-	if _traffic_timer <= 0.0:
+	if _traffic_timer <= 0.0 and not mp:
 		_traffic_timer = 2.0
 		_manage_traffic()
 		_manage_garage_car()
-	_check_save_point(delta)
-	if lock_count > 0 or get_tree().paused or player.dead:
+	if not mp:
+		_check_save_point(delta)
+		_check_armory(delta)
+		_check_paint_shop(delta)
+	_update_aim_marker(delta)
+	if lock_count > 0 or get_tree().paused or player.dead or not can_control():
 		return
 	if Input.is_action_just_pressed("pause"):
 		hud.open_pause()
@@ -519,7 +567,12 @@ func _process(delta: float) -> void:
 	if Input.is_action_just_pressed("vehicle"):
 		toggle_vehicle()
 	if Input.is_action_just_pressed("attack"):
-		player.punch()
+		player.attack(false)
+	elif Input.is_action_pressed("attack") and Game.current_weapon != "fists":
+		player.attack(true)
+	if Input.is_action_just_pressed("weapon_next") and not player.in_vehicle():
+		Game.next_weapon()
+		Sfx.play("reload", -6.0)
 	if Input.is_action_just_pressed("special"):
 		player.use_special()
 	if Input.is_action_just_pressed("use_boost"):
@@ -528,7 +581,10 @@ func _process(delta: float) -> void:
 		Sfx.play("horn", -4.0)
 		alert_peds(player_pos(), 12.0)
 	if Input.is_action_just_pressed("switch_char"):
-		hud.open_char_select()
+		if mp:
+			hud.open_scoreboard()
+		else:
+			hud.open_char_select()
 	for i in 3:
 		if Input.is_action_just_pressed("char_%d" % (i + 1)):
 			request_switch(Game.CHAR_ORDER[i])
@@ -568,7 +624,7 @@ func nearest_car(pos: Vector3, r: float) -> Car:
 	var best: Car = null
 	var best_d := r
 	for c in cars:
-		if not is_instance_valid(c) or c.wrecked or c.hostile or c.driver != null:
+		if not is_instance_valid(c) or c.wrecked or c.hostile or c.driver != null or c.remote_driver != 0:
 			continue
 		var d: float = c.global_position.distance_to(pos)
 		if d < best_d:
@@ -579,16 +635,27 @@ func nearest_car(pos: Vector3, r: float) -> Car:
 
 func toggle_vehicle() -> void:
 	if player.in_vehicle():
+		var leaving := player.vehicle
 		force_exit(player)
+		if mp and net != null:
+			net.release_car(leaving)
 		return
 	var car := nearest_car(player.global_position, 4.6)
 	if car != null:
+		if mp and net != null:
+			net.request_car(car)
+			return
 		enter_vehicle(player, car)
 	else:
 		hud.toast("Nessuna auto nelle vicinanze.", 1.2)
 
 
 func enter_vehicle(p: Protagonist, car: Car) -> void:
+	if p == player and not mp:
+		if car.car_type in ["police", "swat"]:
+			report_crime("hijack_police", car.global_position)
+		elif car.npc_driver:
+			report_crime("hijack", car.global_position)
 	if car.npc_driver:
 		_eject_npc(car)
 	car.ai_mode = Car.AI.NONE
@@ -704,6 +771,9 @@ func switch_to(id: String, instant: bool) -> void:
 	new_p.active = true
 	player = new_p
 	Game.current_char = id
+	if old != null:
+		old.model.set_weapon("fists")
+	new_p.model.set_weapon(Game.current_weapon)
 	if hud != null:
 		hud.on_character_changed()
 	if instant or state != "play":
@@ -760,6 +830,9 @@ func on_player_ko(p: Protagonist) -> void:
 	Sfx.play("ko")
 	Game.vibrate(300)
 	missions.on_player_ko()
+	police.clear()
+	if mp and net != null:
+		net.on_local_ko()
 	await get_tree().create_timer(2.2).timeout
 	await hud.fade(true, 0.45)
 	_respawn(p)
@@ -773,14 +846,52 @@ func on_player_ko(p: Protagonist) -> void:
 
 func _respawn(p: Protagonist) -> void:
 	if p.in_vehicle():
+		var car := p.vehicle
 		force_exit(p)
+		if mp and net != null:
+			net.release_car(car)
 	p.revive()
+	if mp:
+		p.teleport(mp_spawn_point(), PI)
+		camera.snap_behind()
+		return
 	p.teleport(checkpoint, checkpoint_yaw)
 	camera.snap_behind()
 	var fee := mini(Game.money, Game.KO_FEE)
 	if fee > 0:
 		Game.add_money(-fee)
 		hud.toast("Spese mediche: -$%d" % fee, 2.5)
+
+
+## Arresto: come il K.O. ma si riparte dalla questura con multa e armi sequestrate.
+func on_busted() -> void:
+	if _respawning or player.dead:
+		return
+	_respawning = true
+	lock_count += 1
+	hud.refresh_controls()
+	hud.show_busted(true)
+	Sfx.play("busted")
+	Game.vibrate(200)
+	missions.on_player_down("Sei stato arrestato!")
+	police.clear()
+	await get_tree().create_timer(2.2).timeout
+	await hud.fade(true, 0.45)
+	if player.in_vehicle():
+		force_exit(player)
+	player.revive()
+	player.teleport(CityData.POLICE_DOOR, PI)
+	camera.snap_behind()
+	var fee := mini(Game.money, Game.BUSTED_FEE)
+	Game.add_money(-fee)
+	Game.confiscate_weapons()
+	hud.toast("Arrestato: multa di $%d e armi sequestrate." % fee, 3.5)
+	hud.show_busted(false)
+	await hud.fade(false, 0.45)
+	lock_count = maxi(0, lock_count - 1)
+	_respawning = false
+	hud.refresh_controls()
+	missions.after_respawn()
 
 
 func play_ending() -> void:
@@ -809,6 +920,214 @@ func get_blips() -> Array:
 		for f in feathers:
 			if is_instance_valid(f):
 				out.append({"pos": f.global_position, "color": Color(0.7, 0.4, 1.0), "label": "", "kind": "dot"})
+	if not mp:
+		out.append({"pos": CityData.ARMORY_POS, "color": Color(1.0, 0.5, 0.15), "label": "$", "kind": "icon"})
+		out.append({"pos": CityData.POLICE_DOOR, "color": Color(0.35, 0.55, 1.0), "label": "P", "kind": "icon"})
+		out.append_array(police.unit_blips())
+	elif net != null:
+		out.append_array(net.get_blips())
 	if beacon_target != null:
 		out.append({"pos": beacon_target, "color": Color(1.0, 0.85, 0.2), "label": "", "kind": "objective"})
 	return out
+
+
+# ---------------------------------------------------------------- armi
+
+func _on_weapon_changed(id: String) -> void:
+	if player != null:
+		player.model.set_weapon(id)
+	if hud != null:
+		hud.refresh_controls()
+
+
+func camera_flat_forward() -> Vector3:
+	var f := -camera.global_transform.basis.z
+	f.y = 0.0
+	if f.length_squared() < 0.0001:
+		return player.forward()
+	return f.normalized()
+
+
+func aim_point(n: Node3D) -> Vector3:
+	if n.has_method("aim_point"):
+		return n.aim_point()
+	return n.global_position + Vector3(0, 1.2, 0)
+
+
+## Bersaglio della mira automatica: nemici, polizia, elicotteri, altri
+## giocatori e (con priorità minore) pedoni, entro un cono davanti alla
+## telecamera o al personaggio e con linea di vista libera.
+func find_aim_target(p: Protagonist, max_range: float) -> Node3D:
+	var origin := p.global_position + Vector3(0, 1.4, 0)
+	var cam_dir := camera_flat_forward()
+	var best: Node3D = null
+	var best_score := INF
+	var space := get_world_3d().direct_space_state
+	for group in ["enemies", "aim_targets", "net_avatars", "peds"]:
+		for n in get_tree().get_nodes_in_group(group):
+			if n == p or not is_instance_valid(n):
+				continue
+			if n is Actor and (n.dead or (group == "peds" and n.down_time > 0.0)):
+				continue
+			if group == "peds" and not n.model.visible:
+				continue
+			var tp := aim_point(n)
+			var to := tp - origin
+			var d := to.length()
+			if d > max_range or d < 0.4:
+				continue
+			var flat := Vector3(to.x, 0, to.z).normalized()
+			var ang := minf(cam_dir.angle_to(flat), p.forward().angle_to(flat))
+			if ang > deg_to_rad(38.0):
+				continue
+			var score := ang * 25.0 + d * 0.4 + (40.0 if group == "peds" else 0.0)
+			if score >= best_score:
+				continue
+			var q := PhysicsRayQueryParameters3D.create(origin, tp, 1)
+			if not space.intersect_ray(q).is_empty():
+				continue
+			best = n
+			best_score = score
+	return best
+
+
+## Raggio di un proiettile: restituisce il punto d'impatto e il nodo colpito
+## che sa gestire il colpo (metodo take_bullet), se esiste.
+func shoot_ray(origin: Vector3, dir: Vector3, reach: float, exclude: Array) -> Dictionary:
+	var to := origin + dir * reach
+	var q := PhysicsRayQueryParameters3D.create(origin, to, 1 | 2 | 4 | 16, exclude)
+	var hit := get_world_3d().direct_space_state.intersect_ray(q)
+	if hit.is_empty():
+		return {"pos": to, "node": null}
+	var n: Node = hit["collider"]
+	while n != null and n != self and not n.has_method("take_bullet"):
+		n = n.get_parent()
+	if n == self:
+		n = null
+	return {"pos": hit["position"], "node": n}
+
+
+## Colpo sparato da un PNG (polizia, elicottero) verso il giocatore.
+func npc_shoot(shooter: Node3D, origin: Vector3, accuracy: float, dmg: float, weapon: String) -> void:
+	var tp := player_pos() + Vector3(0, 0.9 if player.in_vehicle() else 1.1, 0)
+	var dist := origin.distance_to(tp)
+	var chance := accuracy * clampf(1.25 - dist / 35.0, 0.2, 1.0)
+	if Vector2(player.velocity.x, player.velocity.z).length() > 5.0 or player.in_vehicle():
+		chance *= 0.75
+	var miss := randf() > chance
+	var aim := tp
+	if miss:
+		aim += Vector3(randf_range(-1.6, 1.6), randf_range(-0.4, 1.2), randf_range(-1.6, 1.6))
+	var d := (aim - origin).normalized()
+	var excl: Array = []
+	if shooter is CollisionObject3D:
+		excl.append((shooter as CollisionObject3D).get_rid())
+	var res := shoot_ray(origin, d, 70.0, excl)
+	var hit_node: Node = res["node"]
+	if hit_node != null and (hit_node == player or (player.in_vehicle() and hit_node == player.vehicle)):
+		hit_node.take_bullet(dmg, shooter, d)
+	Gfx.tracer(self, origin, res["pos"], Color(1.0, 0.65, 0.35))
+	Gfx.muzzle_flash(self, origin)
+	Sfx.play_at(Game.WEAPONS.get(weapon, Game.WEAPONS["pistol"])["sound"], origin, camera.global_position, 80.0, -4.0)
+
+
+## Effetto di uno sparo da trasmettere agli altri giocatori (solo multiplayer).
+func net_shot(from: Vector3, to: Vector3, weapon: String) -> void:
+	if mp and net != null:
+		net.send_shot_fx(from, to, weapon)
+
+
+func _update_aim_marker(delta: float) -> void:
+	_aim_t -= delta
+	var armed := Game.current_weapon != "fists" and not player.in_vehicle() and lock_count == 0
+	if not armed:
+		aim_marker.visible = false
+		_aim_target = null
+		return
+	if _aim_t <= 0.0:
+		_aim_t = 0.12
+		_aim_target = find_aim_target(player, float(Game.WEAPONS[Game.current_weapon]["range"]))
+	if _aim_target == null or not is_instance_valid(_aim_target):
+		aim_marker.visible = false
+		return
+	aim_marker.visible = true
+	aim_marker.global_position = aim_point(_aim_target) + Vector3(0, 1.1, 0)
+	aim_marker.rotation.y += delta * 4.0
+
+
+# ---------------------------------------------------------------- polizia e crimini
+
+func report_crime(kind: String, pos: Vector3) -> void:
+	if police != null and not mp:
+		police.report(kind, pos)
+
+
+## Vero se `source` è il giocatore o l'auto che sta guidando.
+func is_player_source(source: Variant) -> bool:
+	if source == null or player == null or not is_instance_valid(source):
+		return false
+	if source == player:
+		return true
+	return source is Car and (source as Car).driver == player
+
+
+func _check_armory(delta: float) -> void:
+	_armory_cd = maxf(0.0, _armory_cd - delta)
+	var near := not player.in_vehicle() and player.global_position.distance_to(CityData.ARMORY_POS) < 1.8
+	if near and _armory_cd <= 0.0 and lock_count == 0 and not hud.is_menu_open():
+		_armory_cd = 1000.0
+		hud.open_armory()
+	elif not near and _armory_cd > 900.0:
+		_armory_cd = 1.0
+
+
+## Riverniciatura al garage di Gus: cancella le stelle se la polizia non ti vede.
+func _check_paint_shop(delta: float) -> void:
+	_spray_cd = maxf(0.0, _spray_cd - delta)
+	if police.stars == 0 or not player.in_vehicle() or _spray_cd > 0.0:
+		return
+	var car: Car = player.vehicle
+	if car.global_position.distance_to(CityData.GARAGE_INSIDE) > 7.0:
+		return
+	_spray_cd = 3.0
+	if police.seen:
+		hud.toast("Gus non vernicia auto con la polizia alle calcagna: seminala prima!", 2.5)
+		return
+	var cost := mini(Game.money, 100)
+	Game.add_money(-cost)
+	police.clear()
+	car.repaint(Car.COLORS[rng.randi() % Car.COLORS.size()])
+	Sfx.play("cash")
+	hud.show_message("RIVERNICIATA!", "Stelle cancellate  -$%d" % cost, Color(1.0, 0.7, 0.3), 2.5)
+
+
+# ---------------------------------------------------------------- multiplayer
+
+func mp_spawn_point() -> Vector3:
+	var best: Vector3 = MP_SPAWNS[0]
+	var best_d := -1.0
+	for i in 6:
+		var p: Vector3 = MP_SPAWNS[rng.randi() % MP_SPAWNS.size()]
+		var d := 999.0
+		if net != null:
+			d = net.nearest_avatar_distance(p)
+		if d > best_d:
+			best_d = d
+			best = p
+	return best
+
+
+func start_multiplayer() -> void:
+	state = "play"
+	set_view_range(view_range)
+	player.teleport(mp_spawn_point(), PI)
+	Game.weapons = {"fists": 0}
+	Game.give_weapon("pistol", 60)
+	camera.snap_behind()
+	hud.set_hud_visible(true)
+	Sfx.music(false)
+	net = NetSession.new()
+	net.name = "Net"
+	net.world = self
+	add_child(net)
+	net.start(Game.pending_mp)

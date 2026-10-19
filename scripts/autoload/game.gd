@@ -4,6 +4,7 @@ extends Node
 
 signal money_changed(value: int)
 signal boosts_changed(value: int)
+signal weapon_changed(id: String)
 signal settings_changed
 
 const SAVE_PATH := "user://savegame.json"
@@ -13,7 +14,25 @@ const MAX_BOOSTS := 5
 const BOOST_HEAL := 35.0
 const TOTAL_MISSIONS := 8
 const KO_FEE := 100
+const BUSTED_FEE := 200
 const TOTAL_FEATHERS := 10
+const VERSION := "1.1.0"
+
+const WEAPON_ORDER := ["fists", "pistol", "smg", "shotgun", "rifle"]
+## Armi del gioco. damage per proiettile, rate = secondi tra un colpo e l'altro,
+## spread in gradi, ammo_pack = colpi per caricatore/pacco acquistato o raccolto.
+const WEAPONS := {
+	"fists": {"name": "PUGNI", "damage": 0.0, "rate": 0.42, "range": 2.2, "spread": 0.0, "pellets": 1,
+		"sound": "", "ammo_pack": 0, "price": 0, "ammo_price": 0, "two_hands": false},
+	"pistol": {"name": "PISTOLA", "damage": 24.0, "rate": 0.32, "range": 45.0, "spread": 1.5, "pellets": 1,
+		"sound": "pistol", "ammo_pack": 24, "price": 300, "ammo_price": 60, "two_hands": false},
+	"smg": {"name": "MITRAGLIETTA", "damage": 11.0, "rate": 0.09, "range": 38.0, "spread": 4.0, "pellets": 1,
+		"sound": "smg", "ammo_pack": 60, "price": 900, "ammo_price": 90, "two_hands": true},
+	"shotgun": {"name": "FUCILE A POMPA", "damage": 10.0, "rate": 0.85, "range": 22.0, "spread": 5.5, "pellets": 7,
+		"sound": "shotgun", "ammo_pack": 12, "price": 1200, "ammo_price": 80, "two_hands": true},
+	"rifle": {"name": "FUCILE D'ASSALTO", "damage": 19.0, "rate": 0.13, "range": 70.0, "spread": 1.6, "pellets": 1,
+		"sound": "rifle", "ammo_pack": 60, "price": 2500, "ammo_price": 150, "two_hands": true},
+}
 
 const CHAR_ORDER := ["mike", "tom", "norman"]
 
@@ -111,6 +130,12 @@ const NPC_LOOKS := {
 	"viper": {"jacket": Color(0.12, 0.12, 0.14), "shirt": Color(0.5, 0.15, 0.6), "pants": Color(0.18, 0.18, 0.2),
 		"skin": Color(0.82, 0.64, 0.5), "hair": Color(0.5, 0.15, 0.6), "shoes": Color(0.08, 0.08, 0.08),
 		"hair_style": "short", "extra": "bandana", "scale": 1.0},
+	"cop": {"jacket": Color(0.12, 0.18, 0.38), "shirt": Color(0.6, 0.75, 0.95), "pants": Color(0.1, 0.12, 0.22),
+		"skin": Color(0.86, 0.68, 0.54), "hair": Color(0.1, 0.14, 0.3), "shoes": Color(0.06, 0.06, 0.06),
+		"hair_style": "cap", "extra": "", "scale": 1.02},
+	"swat": {"jacket": Color(0.12, 0.12, 0.14), "shirt": Color(0.18, 0.18, 0.2), "pants": Color(0.1, 0.1, 0.12),
+		"skin": Color(0.8, 0.62, 0.5), "hair": Color(0.06, 0.06, 0.08), "shoes": Color(0.05, 0.05, 0.05),
+		"hair_style": "cap", "extra": "shades", "scale": 1.08},
 	"boss": {"jacket": Color(0.35, 0.08, 0.42), "shirt": Color(0.1, 0.1, 0.1), "pants": Color(0.12, 0.12, 0.14),
 		"skin": Color(0.6, 0.45, 0.35), "hair": Color(0.1, 0.1, 0.1), "shoes": Color(0.08, 0.08, 0.08),
 		"hair_style": "bald", "extra": "bandana", "scale": 1.25},
@@ -119,6 +144,8 @@ const NPC_LOOKS := {
 var money: int = 0
 var missions_done: int = 0
 var boosts: int = 0
+var weapons: Dictionary = {"fists": 0}
+var current_weapon: String = "fists"
 var feathers: Array = []
 var current_char: String = "mike"
 var char_state: Dictionary = {}
@@ -127,6 +154,10 @@ var ending_seen: bool = false
 var play_time: float = 0.0
 var test_mode: bool = false
 var pending_continue: bool = false
+## Parametri della partita multiplayer da avviare dopo il ricaricamento della scena.
+var pending_mp: Dictionary = {}
+## Messaggio da mostrare nel menu principale (es. "connessione persa").
+var pending_message: String = ""
 
 var settings: Dictionary = {
 	"master": 0.9,
@@ -138,6 +169,7 @@ var settings: Dictionary = {
 	"touch_opacity": 0.8,
 	"vibration": true,
 	"invert_y": false,
+	"player_name": "",
 }
 
 
@@ -174,6 +206,7 @@ func _setup_input() -> void:
 		"horn": [KEY_H],
 		"pause": [KEY_ESCAPE, KEY_P],
 		"map": [KEY_M],
+		"weapon_next": [KEY_E, KEY_X],
 	}
 	for action in map:
 		if not InputMap.has_action(action):
@@ -194,6 +227,8 @@ func new_game() -> void:
 	money = 250
 	missions_done = 0
 	boosts = 1
+	weapons = {"fists": 0}
+	current_weapon = "fists"
 	feathers = []
 	current_char = "mike"
 	char_state = {}
@@ -217,6 +252,64 @@ func add_boost() -> bool:
 	return true
 
 
+# ---------------------------------------------------------------- armi
+
+func give_weapon(id: String, ammo: int) -> void:
+	if not WEAPONS.has(id):
+		return
+	var first := not weapons.has(id)
+	weapons[id] = int(weapons.get(id, 0)) + ammo
+	if first or current_weapon == "fists":
+		current_weapon = id
+	weapon_changed.emit(current_weapon)
+
+
+func equip_weapon(id: String) -> void:
+	if weapons.has(id):
+		current_weapon = id
+		weapon_changed.emit(id)
+
+
+func ammo() -> int:
+	return int(weapons.get(current_weapon, 0))
+
+
+func use_ammo() -> bool:
+	if current_weapon == "fists":
+		return true
+	var a := ammo()
+	if a <= 0:
+		return false
+	weapons[current_weapon] = a - 1
+	return true
+
+
+## Passa all'arma successiva con munizioni (i pugni sono sempre disponibili).
+func next_weapon() -> String:
+	var start := WEAPON_ORDER.find(current_weapon)
+	for k in range(1, WEAPON_ORDER.size() + 1):
+		var id: String = WEAPON_ORDER[(start + k) % WEAPON_ORDER.size()]
+		if id == "fists" or int(weapons.get(id, 0)) > 0:
+			current_weapon = id
+			break
+	weapon_changed.emit(current_weapon)
+	return current_weapon
+
+
+func confiscate_weapons() -> void:
+	weapons = {"fists": 0}
+	current_weapon = "fists"
+	weapon_changed.emit(current_weapon)
+
+
+func player_name() -> String:
+	var n := str(settings.get("player_name", "")).strip_edges()
+	if n == "":
+		n = "Giocatore %d" % (randi() % 90 + 10)
+		settings["player_name"] = n
+	return n.substr(0, 16)
+
+
 func take_boost() -> bool:
 	if boosts <= 0:
 		return false
@@ -238,6 +331,8 @@ func save_game(chars: Dictionary) -> bool:
 		"money": money,
 		"missions_done": missions_done,
 		"boosts": boosts,
+		"weapons": weapons,
+		"current_weapon": current_weapon,
 		"feathers": feathers,
 		"current_char": current_char,
 		"intro_seen": intro_seen,
@@ -270,6 +365,16 @@ func load_game() -> bool:
 	money = int(d.get("money", 0))
 	missions_done = clampi(int(d.get("missions_done", 0)), 0, TOTAL_MISSIONS)
 	boosts = clampi(int(d.get("boosts", 0)), 0, MAX_BOOSTS)
+	weapons = {"fists": 0}
+	var w: Variant = d.get("weapons", {})
+	if typeof(w) == TYPE_DICTIONARY:
+		for k in w:
+			if WEAPONS.has(str(k)):
+				weapons[str(k)] = maxi(0, int(w[k]))
+	current_weapon = str(d.get("current_weapon", "fists"))
+	if not weapons.has(current_weapon):
+		current_weapon = "fists"
+	weapon_changed.emit(current_weapon)
 	feathers = d.get("feathers", [])
 	current_char = str(d.get("current_char", "mike"))
 	if not CHARACTERS.has(current_char):

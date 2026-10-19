@@ -8,6 +8,7 @@ var data: Dictionary = {}
 var active := false
 var vehicle: Car = null
 var punch_cd := 0.0
+var fire_cd := 0.0
 var special_cd := 0.0
 var special_time := 0.0
 var _hurt_sfx_cd := 0.0
@@ -34,6 +35,7 @@ func in_vehicle() -> bool:
 
 func _physics_process(delta: float) -> void:
 	punch_cd = maxf(0.0, punch_cd - delta)
+	fire_cd = maxf(0.0, fire_cd - delta)
 	special_cd = maxf(0.0, special_cd - delta)
 	invuln = maxf(0.0, invuln - delta)
 	_hurt_sfx_cd = maxf(0.0, _hurt_sfx_cd - delta)
@@ -72,6 +74,59 @@ func _physics_process(delta: float) -> void:
 
 # ---------------------------------------------------------------- combattimento
 
+## Pulsante di attacco: pugno a mani nude, altrimenti spara con l'arma in mano.
+## `held` = pulsante tenuto premuto (fuoco continuo al ritmo dell'arma).
+func attack(held: bool) -> void:
+	if vehicle != null or dead or down_time > 0.0:
+		return
+	if Game.current_weapon == "fists":
+		if not held:
+			punch()
+		return
+	fire_weapon()
+
+
+func fire_weapon() -> void:
+	if fire_cd > 0.0:
+		return
+	var w: String = Game.current_weapon
+	var def: Dictionary = Game.WEAPONS[w]
+	if not Game.use_ammo():
+		fire_cd = 0.35
+		Sfx.play("empty")
+		world.hud.toast("%s: munizioni finite!" % def["name"], 1.2)
+		Game.next_weapon()
+		return
+	fire_cd = float(def["rate"])
+	var reach: float = def["range"]
+	var target: Node3D = world.find_aim_target(self, reach)
+	var head := global_position + Vector3(0, 1.45 * model.scale.y, 0)
+	var aim_dir: Vector3 = world.camera_flat_forward()
+	if target != null:
+		aim_dir = world.aim_point(target) - head
+	var flat := Vector3(aim_dir.x, 0, aim_dir.z)
+	if flat.length() > 0.01:
+		set_yaw(atan2(-flat.x, -flat.z))
+	aim_dir = aim_dir.normalized()
+	var origin := head + forward() * 0.6
+	model.aim(0.6)
+	var spread := tan(deg_to_rad(float(def["spread"])))
+	var dmg: float = float(def["damage"]) * (1.5 if char_id == "norman" and special_time > 0.0 else 1.0)
+	for i in int(def["pellets"]):
+		var jitter := Vector3(randf_range(-1, 1), randf_range(-1, 1), randf_range(-1, 1)) * spread
+		var d := (aim_dir + jitter).normalized()
+		var res: Dictionary = world.shoot_ray(origin, d, reach, [get_rid()])
+		if res["node"] != null:
+			res["node"].take_bullet(dmg, self, d)
+		Gfx.tracer(world, origin, res["pos"])
+		world.net_shot(origin, res["pos"], w)
+	Gfx.muzzle_flash(world, origin)
+	Sfx.play(def["sound"], -3.0, randf_range(0.95, 1.05))
+	world.camera.shake(0.18 if w == "shotgun" else 0.05)
+	world.alert_peds(global_position, 30.0)
+	world.report_crime("shots", global_position)
+
+
 func punch() -> void:
 	if punch_cd > 0.0 or dead or down_time > 0.0 or vehicle != null:
 		return
@@ -96,6 +151,12 @@ func punch() -> void:
 			a.take_damage(dmg, self, push)
 			hit = true
 			Gfx.burst(world, a.global_position + Vector3(0, 1.4, 0), Color(1.0, 0.9, 0.4), 8, 3.0, 0.1, 0.4)
+	for av in get_tree().get_nodes_in_group("net_avatars"):
+		var rel2: Vector3 = av.global_position - global_position
+		rel2.y = 0.0
+		if rel2.length() < 2.2 and rel2.normalized().dot(fwd) > 0.3:
+			av.net_hit(dmg, "punch")
+			hit = true
 	if hit:
 		Sfx.play("punch")
 		world.camera.shake(0.12)

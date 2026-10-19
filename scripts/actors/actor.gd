@@ -92,6 +92,14 @@ func take_damage(amount: float, source: Node = null, push: Vector3 = Vector3.ZER
 		_on_die(source)
 
 
+## Colpo d'arma da fuoco (scintille, nessun effetto cruento).
+func take_bullet(amount: float, source: Node, dir: Vector3) -> void:
+	if dead:
+		return
+	Gfx.burst(world, global_position + Vector3(0, 1.2, 0), Color(1.0, 0.85, 0.4), 6, 3.0, 0.07, 0.3)
+	take_damage(amount, source, Vector3(dir.x, 0, dir.z) * 1.5)
+
+
 func hit_by_car(car: Node, spd: float, push: Vector3) -> void:
 	take_damage(spd * 1.3, car, push)
 	if not dead:

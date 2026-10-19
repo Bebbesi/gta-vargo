@@ -17,13 +17,32 @@ func _ready() -> void:
 	ui.add_child(loading)
 	await get_tree().process_frame
 	await get_tree().process_frame
+	var args := OS.get_cmdline_user_args()
+	var mp_test := ""
+	var mp_port := NetSession.PORT
+	for a in args:
+		if a.begins_with("--mp-test="):
+			mp_test = a.get_slice("=", 1)
+		elif a.begins_with("--mp-port="):
+			mp_port = int(a.get_slice("=", 1))
+	if mp_test != "":
+		Game.pending_mp = {"host": mp_test == "host", "ip": "127.0.0.1", "port": mp_port,
+			"char": "mike" if mp_test == "host" else "tom", "mode": "deathmatch"}
+		Game.settings["player_name"] = "Host" if mp_test == "host" else "Ospite"
 	world = World.new()
 	world.name = "World"
 	world.main = self
 	add_child(world)
 	world.build()
 	loading.queue_free()
-	var args := OS.get_cmdline_user_args()
+	if not Game.pending_mp.is_empty():
+		world.start_multiplayer()
+		if mp_test != "":
+			var tester: Node = load("res://tests/mp_test.gd").new()
+			tester.set("world", world)
+			tester.set("role", mp_test)
+			add_child(tester)
+		return
 	if Game.test_mode:
 		var runner: Node = load("res://tests/test_runner.gd").new()
 		runner.set("world", world)
@@ -65,6 +84,9 @@ func show_main_menu() -> void:
 	menu = MainMenu.new()
 	menu.main = self
 	ui.add_child(menu)
+	if Game.pending_message != "":
+		menu.show_notice(Game.pending_message)
+		Game.pending_message = ""
 
 
 func _close_menu() -> void:
@@ -85,6 +107,14 @@ func continue_game() -> void:
 		world.continue_game()
 
 
+## Avvia una partita multiplayer: la scena viene ricaricata in modalità rete.
+func start_multiplayer(params: Dictionary) -> void:
+	Game.pending_mp = params
+	Game.pending_continue = false
+	Game.save_settings()
+	_reload()
+
+
 func load_saved_game() -> void:
 	Game.pending_continue = true
 	_reload()
@@ -92,6 +122,7 @@ func load_saved_game() -> void:
 
 func back_to_menu() -> void:
 	Game.pending_continue = false
+	Game.pending_mp = {}
 	_reload()
 
 

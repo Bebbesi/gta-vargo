@@ -58,6 +58,7 @@ func build(w: Node3D) -> void:
 	for zi in 6:
 		for xi in 6:
 			_block(xi, zi)
+	armory_sign()
 	_docks()
 	_airport()
 	_outskirts()
@@ -169,6 +170,9 @@ func _block(xi: int, zi: int) -> void:
 		"garage":
 			_inner(c, C_CONCRETE)
 			_garage(c)
+		"police":
+			_inner(c, C_CONCRETE)
+			_police_station(c)
 		"yard":
 			_inner(c, Color(0.45, 0.44, 0.42))
 			_yard(c)
@@ -354,6 +358,11 @@ func _shops(c: Vector3) -> void:
 			solid.box(Vector3(lc.x, h + 0.2, lc.z), Vector3(w + 0.3, 0.4, d + 0.3), wall.darkened(0.25))
 
 
+func armory_sign() -> void:
+	var p := CityData.ARMORY_POS
+	sign_label("ARMERIA", Vector3(p.x, 4.2, p.z + 3.4), PI, 90, Color(1.0, 0.55, 0.2))
+
+
 func _industrial(c: Vector3) -> void:
 	var w := rng.randf_range(24.0, 34.0)
 	var d := rng.randf_range(13.0, 17.0)
@@ -409,6 +418,26 @@ func _garage(_c: Vector3) -> void:
 		solid.cylinder(Vector3(-104.0, 0.25 + i * 0.4, -101.5), 0.6, 0.6, 0.38, 8, Color(0.1, 0.1, 0.1))
 	col(Vector3(-104.0, 0.6, -101.5), Vector3(1.2, 1.2, 1.2))
 	sign_label("GARAGE DA GUS", Vector3(x1 + 0.1, h - 1.0, -90.0), PI * 0.5, 90, Color(1.0, 0.95, 0.85))
+
+
+func _police_station(c: Vector3) -> void:
+	var wall := Color(0.9, 0.92, 0.95)
+	var blue := Color(0.12, 0.22, 0.5)
+	sbox(Vector3(c.x, 4.5, c.z - 9), Vector3(30, 9, 18), wall)
+	solid.box(Vector3(c.x, 9.25, c.z - 9), Vector3(30.6, 0.5, 18.6), blue)
+	solid.box(Vector3(c.x, 3.2, c.z - 9), Vector3(30.1, 0.6, 18.1), blue)
+	for gy: float in [1.6, 5.8]:
+		solid.box(Vector3(c.x, gy, c.z - 9), Vector3(30.12, 1.4, 18.12), Color(0.35, 0.5, 0.65))
+	solid.box(Vector3(c.x, 1.3, c.z - 0.0 + 0.04), Vector3(3.2, 2.6, 0.12), Color(0.2, 0.25, 0.35))
+	sbox(Vector3(c.x - 2.2, 1.4, c.z + 1.2), Vector3(0.4, 2.8, 0.4), blue)
+	sbox(Vector3(c.x + 2.2, 1.4, c.z + 1.2), Vector3(0.4, 2.8, 0.4), blue)
+	solid.box(Vector3(c.x, 2.9, c.z + 1.0), Vector3(5.0, 0.3, 2.6), blue)
+	sign_label("POLIZIA - QUESTURA", Vector3(c.x, 7.6, c.z + 0.08), 0.0, 80, Color(0.85, 0.92, 1.0))
+	ground.box(Vector3(c.x, 0.075, c.z + 10.5), Vector3(38, 0.03, 15), C_ASPHALT)
+	for i in 6:
+		ground.top_quad(Vector3(c.x - 15 + i * 6.0, 0.095, c.z + 10.5), 0.18, 6.0, C_LINE)
+	for sx: float in [-17.0, 17.0]:
+		_tree(Vector3(c.x + sx, 0, c.z - 15.0), 0.9)
 
 
 func _yard(_c: Vector3) -> void:

@@ -15,6 +15,10 @@ var punch_left := false
 var is_down := false
 var flash_t := 0.0
 var aura: MeshInstance3D
+var weapon_mesh: MeshInstance3D
+var weapon_id := "fists"
+var aim_t := 0.0
+var _two_hands := false
 
 
 func build(look: Dictionary) -> void:
@@ -137,6 +141,12 @@ func animate(delta: float, speed_ratio: float, on_floor: bool) -> void:
 	body.position.y = absf(sin(phase)) * 0.05 * sr
 	if sr < 0.05:
 		body.position.y = sin(phase * 0.5) * 0.008
+	if aim_t > 0.0:
+		# Braccio (o braccia) tesi in avanti mentre si spara.
+		aim_t -= delta
+		arm_r.rotation = Vector3(1.5, 0, 0)
+		if _two_hands:
+			arm_l.rotation = Vector3(1.35, 0, 0.45)
 	if punch_t > 0.0:
 		punch_t -= delta
 		var k := clampf(punch_t / 0.3, 0.0, 1.0)
@@ -148,6 +158,42 @@ func animate(delta: float, speed_ratio: float, on_floor: bool) -> void:
 		body.rotation.y = sin(k * PI) * (0.25 if not punch_left else -0.25)
 	else:
 		body.rotation.y = 0.0
+
+
+## Mostra l'arma nella mano destra (scatole low-poly, canna lungo -Y del braccio).
+func set_weapon(id: String) -> void:
+	weapon_id = id
+	if weapon_mesh != null:
+		weapon_mesh.queue_free()
+		weapon_mesh = null
+	_two_hands = bool(Game.WEAPONS.get(id, {}).get("two_hands", false))
+	if id == "fists" or arm_r == null:
+		return
+	var b := MeshBatch.new()
+	var metal := Color(0.16, 0.16, 0.18)
+	match id:
+		"pistol":
+			b.box(Vector3(0, -0.74, -0.04), Vector3(0.07, 0.3, 0.09), metal)
+			b.box(Vector3(0, -0.64, 0.04), Vector3(0.06, 0.08, 0.16), Color(0.25, 0.2, 0.15))
+		"smg":
+			b.box(Vector3(0, -0.8, -0.04), Vector3(0.08, 0.44, 0.11), metal)
+			b.box(Vector3(0, -0.74, 0.06), Vector3(0.05, 0.08, 0.2), metal)
+		"shotgun":
+			b.box(Vector3(0, -0.92, -0.04), Vector3(0.07, 0.8, 0.08), Color(0.12, 0.12, 0.13))
+			b.box(Vector3(0, -0.6, -0.02), Vector3(0.08, 0.26, 0.11), Color(0.45, 0.28, 0.14))
+		"rifle":
+			b.box(Vector3(0, -0.9, -0.04), Vector3(0.08, 0.84, 0.1), Color(0.1, 0.1, 0.11))
+			b.box(Vector3(0, -0.84, 0.08), Vector3(0.05, 0.08, 0.2), Color(0.1, 0.1, 0.11))
+			b.box(Vector3(0, -0.62, -0.02), Vector3(0.07, 0.2, 0.12), Color(0.2, 0.25, 0.18))
+	weapon_mesh = MeshInstance3D.new()
+	weapon_mesh.mesh = b.commit()
+	weapon_mesh.material_override = Gfx.vc_mat()
+	weapon_mesh.visibility_range_end = 60.0
+	arm_r.add_child(weapon_mesh)
+
+
+func aim(t: float = 0.5) -> void:
+	aim_t = maxf(aim_t, t)
 
 
 func play_punch() -> void:

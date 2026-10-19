@@ -16,7 +16,7 @@ const WALK_HALF := 21.4      # percorso pedonale sul marciapiede
 const LAYOUT := [
 	["residential", "residential", "park", "residential", "parking", "safehouse"],
 	["residential", "garage", "downtown", "downtown", "downtown", "residential"],
-	["park", "downtown", "plaza", "downtown", "downtown", "shops"],
+	["park", "downtown", "plaza", "downtown", "downtown", "police"],
 	["residential", "downtown", "downtown", "downtown", "shops", "shops"],
 	["industrial", "industrial", "lot", "industrial", "industrial", "industrial"],
 	["industrial", "yard", "industrial", "industrial", "industrial", "industrial"],
@@ -26,7 +26,7 @@ const DISTRICT_NAMES := {
 	"residential": "Colline Nord", "park": "Parco", "parking": "Parcheggio",
 	"safehouse": "Rifugio", "garage": "Garage", "downtown": "Centro",
 	"plaza": "Piazza del Corvo", "shops": "Mercato", "industrial": "Zona Industriale",
-	"lot": "Zona Industriale", "yard": "Magazzino Vipere",
+	"lot": "Zona Industriale", "yard": "Magazzino Vipere", "police": "Questura",
 }
 
 # --- Luoghi chiave
@@ -51,6 +51,16 @@ const YARD_MARK := Vector3(-90, 0, 128)
 const HANGAR := Vector3(298, 0, 122)
 const JET := Vector3(322, 0, 122)
 const RACE_START := Vector3(-56.5, 0, -112)
+const POLICE_DOOR := Vector3(150, 0, -24)
+const ARMORY_POS := Vector3(101, 0, 8.6)
+
+# Armi raccoglibili in città: [arma, posizione]
+const WEAPON_SPOTS := [
+	["pistol", Vector3(-68.6, 0, -78)], ["pistol", Vector3(8.6, 0, 138)], ["pistol", Vector3(212, 0, -30)],
+	["smg", Vector3(-18, 0, -8.6)], ["smg", Vector3(128.6, 0, 102)],
+	["shotgun", Vector3(-128.6, 0, 138)], ["shotgun", Vector3(78, 0, -128.6)],
+	["rifle", Vector3(361, 0, -188)],
+]
 
 const CLUES := [
 	Vector3(266, 0, -88),

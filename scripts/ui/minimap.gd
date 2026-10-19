@@ -85,6 +85,10 @@ func _draw() -> void:
 			var pk := p as Pickup
 			if pk.kind == "boost" and pk.active and pk.global_position.distance_to(_center()) < 140.0:
 				draw_circle(to_map(pk.global_position), 3.5, Color(0.55, 0.32, 0.12))
+	var pol: Police = world.police
+	if pol != null and pol.stars > 0 and not pol.seen:
+		var col := Color(0.3, 0.5, 1.0, 0.22) if (Time.get_ticks_msec() / 400) % 2 == 0 else Color(1.0, 0.25, 0.25, 0.22)
+		draw_circle(to_map(pol.last_seen), pol.search_radius() * s, col)
 	for bl in world.get_blips():
 		_draw_blip(bl)
 	_draw_player()

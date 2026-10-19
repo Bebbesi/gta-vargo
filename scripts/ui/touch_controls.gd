@@ -15,7 +15,7 @@ var joy_vec := Vector2.ZERO
 var cam_finger := -1
 var joy_home := Vector2(170, 560)
 
-const FOOT := ["attack", "jump", "vehicle", "special", "use_boost", "switch_char", "pause"]
+const FOOT := ["attack", "jump", "vehicle", "special", "use_boost", "switch_char", "pause", "weapon_next"]
 const CAR := ["accelerate", "brake", "vehicle", "special", "use_boost", "horn", "switch_char", "pause"]
 
 
@@ -33,6 +33,7 @@ func _ready() -> void:
 	_add("accelerate", "GAS", 64, Color(0.2, 0.7, 0.3))
 	_add("brake", "FRENO", 50, Color(0.8, 0.2, 0.2))
 	_add("horn", "CLACSON", 34, Color(0.4, 0.4, 0.45))
+	_add("weapon_next", "ARMA", 36, Color(0.75, 0.45, 0.15))
 	get_viewport().size_changed.connect(_layout)
 	_layout()
 	set_mode("hidden")
@@ -56,6 +57,7 @@ func _layout() -> void:
 		"use_boost": Vector2(vs.x - 345, vs.y - 62),
 		"horn": Vector2(vs.x - 335, vs.y - 165),
 		"switch_char": Vector2(vs.x - 75, vs.y - 380),
+		"weapon_next": Vector2(vs.x - 205, vs.y - 315),
 		"pause": Vector2(vs.x - 280, 52),
 	}
 	for k in places:

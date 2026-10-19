@@ -165,3 +165,35 @@ static func emitter(parent: Node, c: Color, amount: int = 12, size: float = 0.4,
 	p.emitting = false
 	parent.add_child(p)
 	return p
+
+
+## Scia luminosa di un proiettile (dura un istante).
+static func tracer(parent: Node, from: Vector3, to: Vector3, c: Color = Color(1.0, 0.9, 0.5)) -> void:
+	if parent == null or not parent.is_inside_tree():
+		return
+	var length := from.distance_to(to)
+	if length < 0.2:
+		return
+	var mi := MeshInstance3D.new()
+	mi.mesh = box_mesh(Vector3(0.05, 0.05, 1.0))
+	mi.material_override = mat(Color(c.r, c.g, c.b, 0.85), 2.0, true)
+	mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	parent.add_child(mi)
+	mi.global_position = (from + to) * 0.5
+	mi.look_at(to, Vector3.UP if absf((to - from).normalized().y) < 0.99 else Vector3.FORWARD)
+	mi.scale = Vector3(1, 1, length)
+	mi.get_tree().create_timer(0.07).timeout.connect(mi.queue_free)
+
+
+## Lampo alla bocca dell'arma.
+static func muzzle_flash(parent: Node, pos: Vector3) -> void:
+	if parent == null or not parent.is_inside_tree():
+		return
+	var mi := MeshInstance3D.new()
+	mi.mesh = box_mesh(Vector3(0.22, 0.22, 0.22))
+	mi.material_override = mat(Color(1.0, 0.85, 0.3), 3.0, true)
+	mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	parent.add_child(mi)
+	mi.global_position = pos
+	mi.rotation = Vector3(randf() * TAU, randf() * TAU, 0)
+	mi.get_tree().create_timer(0.05).timeout.connect(mi.queue_free)

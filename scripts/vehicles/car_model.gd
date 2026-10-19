@@ -14,6 +14,8 @@ var nitro_fx: CPUParticles3D
 var driver_head: MeshInstance3D
 var size := Vector3.ONE
 var _spin := 0.0
+var siren_lights: Array[MeshInstance3D] = []
+var siren_on := false
 
 
 static func wheel_mesh() -> CylinderMesh:
@@ -40,7 +42,7 @@ func build(type: String, c: Color, sz: Vector3) -> void:
 	var b := MeshBatch.new()
 	var cab_z := 0.0
 	var top_y := h
-	if type == "van":
+	if type == "van" or type == "swat":
 		b.box(Vector3(0, cl + (h - cl) * 0.5, 0.35), Vector3(w, h - cl, l - 0.7), c)
 		b.box(Vector3(0, cl + lower_h * 0.5, -l * 0.5 + 0.4), Vector3(w * 0.98, lower_h, 0.8), c)
 		b.box(Vector3(0, cl + h * 0.58, -l * 0.5 + 0.72), Vector3(w * 0.9, h * 0.32, 0.06), glass)
@@ -76,11 +78,24 @@ func build(type: String, c: Color, sz: Vector3) -> void:
 		"taxi":
 			b.box(Vector3(0, top_y + 0.13, cab_z), Vector3(0.8, 0.26, 0.32), Color(1.0, 0.95, 0.45))
 			b.box(Vector3(0, cl + lower_h * 0.5, 0), Vector3(w + 0.02, 0.18, l * 0.7), Color(0.1, 0.1, 0.1))
+		"police":
+			b.box(Vector3(0, cl + lower_h * 0.5, 0.1), Vector3(w + 0.02, lower_h * 0.55, l * 0.55), Color(0.1, 0.16, 0.38))
+			b.box(Vector3(0, cl + lower_h + 0.006, -l * 0.3), Vector3(w * 0.7, 0.02, 0.5), Color(0.1, 0.16, 0.38))
+		"swat":
+			b.box(Vector3(0, cl + h * 0.35, 0.8), Vector3(w + 0.03, 0.3, l * 0.6), Color(0.85, 0.85, 0.2))
 		"luxury":
 			b.box(Vector3(0, cl + lower_h * 0.75, 0), Vector3(w + 0.02, 0.06, l * 0.96), Color(0.85, 0.85, 0.9))
 			b.box(Vector3(0, cl + lower_h * 0.6, -l * 0.5 - 0.05), Vector3(w * 0.4, 0.3, 0.06), Color(0.8, 0.8, 0.85))
 	body_mesh = Gfx.add_batch(self, b)
 	body_mesh.visibility_range_end = 220.0
+	if type == "police" or type == "swat":
+		var roof := (h - 0.02) if type == "swat" else top_y
+		Gfx.add_box(self, Vector3(1.2, 0.1, 0.32), Color(0.15, 0.15, 0.17), Vector3(0, roof + 0.05, cab_z))
+		for sx: float in [-0.32, 0.32]:
+			var light := Gfx.add_box(self, Vector3(0.5, 0.16, 0.3), Color(0.9, 0.1, 0.1) if sx < 0 else Color(0.15, 0.3, 1.0), Vector3(sx, roof + 0.16, cab_z))
+			light.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+			siren_lights.append(light)
+		_update_siren()
 
 	var wx := w * 0.5 - 0.1
 	var wz := l * 0.5 - (1.0 if type == "van" else 0.85)
@@ -124,7 +139,24 @@ func update_visuals(delta: float, speed: float, steer: float) -> void:
 		s.rotation.x = -_spin
 	for p in steer_pivots:
 		p.rotation.y = lerpf(p.rotation.y, steer * 0.45, clampf(10.0 * delta, 0.0, 1.0))
+	if siren_on:
+		_update_siren()
 	body_mesh.rotation.z = lerpf(body_mesh.rotation.z, -steer * clampf(absf(speed) / 30.0, 0.0, 1.0) * 0.05, clampf(6.0 * delta, 0.0, 1.0))
+
+
+func set_siren(on: bool) -> void:
+	siren_on = on
+	_update_siren()
+
+
+func _update_siren() -> void:
+	if siren_lights.size() < 2:
+		return
+	var phase := (Time.get_ticks_msec() / 220) % 2 == 0
+	var red := Color(1.0, 0.12, 0.1)
+	var blue := Color(0.2, 0.35, 1.0)
+	siren_lights[0].material_override = Gfx.mat(red, 3.0 if siren_on and phase else 0.0, siren_on and phase)
+	siren_lights[1].material_override = Gfx.mat(blue, 3.0 if siren_on and not phase else 0.0, siren_on and not phase)
 
 
 func set_damage(ratio: float) -> void:

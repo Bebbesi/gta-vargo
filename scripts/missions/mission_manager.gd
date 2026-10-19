@@ -157,8 +157,12 @@ func _on_finished(success: bool, reason: String) -> void:
 
 
 func on_player_ko() -> void:
+	on_player_down("Sei finito K.O.")
+
+
+func on_player_down(reason: String) -> void:
 	if current != null:
-		current.fail("Sei finito K.O.")
+		current.fail(reason)
 
 
 func after_respawn() -> void:

@@ -82,15 +82,23 @@ static func help(parent: Control, on_close: Callable) -> void:
 •  PUGNO, SALTA, ENTRA/ESCI dall'auto, GAS e FRENO (tieni premuto per la retromarcia).
 •  CAMBIA: passa da Mike, Tom e Norman.  Speciale: NITRO, ANALISI o FURIA.
 •  BOOST: consuma un Brown Boost conservato e recupera salute.
+•  ARMA: cambia arma. Con un'arma in mano PUGNO diventa SPARA (mira automatica, tieni premuto).
 
 TASTIERA (PC)
 •  WASD/frecce muovi e guidi · Spazio salta · J pugno · F auto · R speciale
-•  B Brown Boost · Tab/Q cambia personaggio (1-2-3 diretto) · H clacson · M mappa · Esc pausa
+•  B Brown Boost · E/X cambia arma · Tab/Q cambia personaggio (1-2-3) · H clacson · M mappa · Esc pausa
+
+POLIZIA
+•  I crimini fanno salire le stelle (fino a 5): pattuglie, agenti armati, SWAT ed elicottero.
+•  Per seminarla esci dal cerchio di ricerca sulla mappa e resta fuori vista; oppure fai riverniciare l'auto da Gus.
+•  Con 1 stella, se un agente ti blocca a piedi vieni arrestato: multa e armi sequestrate.
 
 CONSIGLI
 •  Le missioni sono indicate sulla minimappa con una lettera: S storia, M Mike, T Tom, N Norman.
 •  Il cerchio verde SALVA davanti al rifugio salva la partita e ripristina la salute.
-•  Se vai K.O. torni al rifugio (o all'ultimo checkpoint) pagando $100 di spese mediche."""
+•  Se vai K.O. torni al rifugio (o all'ultimo checkpoint) pagando $100 di spese mediche.
+•  Armi in vendita all'ARMERIA ($ sulla mappa) e sparse per la città.
+•  MULTIPLAYER LAN: dal menu principale crea una partita o unisciti a quella di un amico sulla stessa Wi-Fi."""
 	var l := UIKit.label(text, 19, Color(0.95, 0.95, 0.95), 0)
 	l.custom_minimum_size = Vector2(900, 0)
 	l.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART

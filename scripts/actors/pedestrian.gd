@@ -102,7 +102,15 @@ func _nearest_corner() -> void:
 	loop_i = best
 
 
+func _on_die(source: Node) -> void:
+	super._on_die(source)
+	if world.is_player_source(source):
+		world.report_crime("ped_ko", global_position)
+
+
 func _on_damaged(_amount: float, source: Node) -> void:
+	if world.is_player_source(source):
+		world.report_crime("assault", global_position)
 	if source is Node3D:
 		flee((source as Node3D).global_position, 8.0)
 	else:

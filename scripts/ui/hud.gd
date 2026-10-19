@@ -19,6 +19,39 @@ class Portrait extends Control:
 		draw_string(f, c + Vector2(-w * 0.5, fs * 0.36), letter, HORIZONTAL_ALIGNMENT_LEFT, -1, fs, Color.WHITE)
 
 
+class Stars extends Control:
+	var count := 0
+	var blink := false
+	var flash_t := 0.0
+
+	func _process(delta: float) -> void:
+		flash_t = maxf(0.0, flash_t - delta)
+		if count > 0 or flash_t > 0.0:
+			queue_redraw()
+
+	func _draw() -> void:
+		if count == 0 and flash_t <= 0.0:
+			return
+		var on := (Time.get_ticks_msec() / 260) % 2 == 0
+		for i in 5:
+			var c := Vector2(size.x - 18.0 - (4 - i) * 32.0, 16.0)
+			var filled := i < count
+			var col := Color(1.0, 0.82, 0.2) if filled else Color(0.1, 0.1, 0.12, 0.55)
+			if filled and (blink or flash_t > 0.0) and not on:
+				col = Color(1.0, 1.0, 1.0, 0.45)
+			_star(c, 14.0, col)
+
+	func _star(c: Vector2, r: float, col: Color) -> void:
+		var pts := PackedVector2Array()
+		for k in 10:
+			var a := -PI * 0.5 + k * PI / 5.0
+			var rr := r if k % 2 == 0 else r * 0.45
+			pts.append(c + Vector2(cos(a), sin(a)) * rr)
+		draw_colored_polygon(pts, col)
+		pts.append(pts[0])
+		draw_polyline(pts, Color(0, 0, 0, 0.85), 2.0, true)
+
+
 var world: Node
 var hud_root: Control
 var menu_layer: Control
@@ -32,6 +65,10 @@ var health_text: Label
 var money_label: Label
 var boost_label: Label
 var special_label: Label
+var weapon_label: Label
+var stars: Stars
+var busted_overlay: Control
+var score_label: Label
 var obj_panel: PanelContainer
 var obj_label: Label
 var extra_label: Label
@@ -153,6 +190,12 @@ func _build_top_left() -> void:
 	special_label = UIKit.label("", 16, Color(0.85, 0.75, 1.0), 4)
 	special_label.position = Vector2(4, 116)
 	tl.add_child(special_label)
+	weapon_label = UIKit.label("", 20, Color(1.0, 0.8, 0.5), 5)
+	weapon_label.position = Vector2(4, 138)
+	tl.add_child(weapon_label)
+	score_label = UIKit.label("", 17, Color.WHITE, 4)
+	score_label.position = Vector2(4, 168)
+	tl.add_child(score_label)
 
 
 func _build_objective() -> void:
@@ -203,9 +246,18 @@ func _build_minimap() -> void:
 	district_label.anchor_right = 1.0
 	district_label.offset_left = -420
 	district_label.offset_right = -18
-	district_label.offset_top = 222
+	district_label.offset_top = 256
 	district_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
 	hud_root.add_child(district_label)
+	stars = Stars.new()
+	stars.anchor_left = 1.0
+	stars.anchor_right = 1.0
+	stars.offset_left = -222
+	stars.offset_right = -18
+	stars.offset_top = 222
+	stars.offset_bottom = 254
+	stars.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	hud_root.add_child(stars)
 
 
 func _build_speedo() -> void:
@@ -240,7 +292,7 @@ func _build_speedo() -> void:
 
 func _build_messages() -> void:
 	toast_panel = UIKit.panel(Color(0, 0, 0, 0.72), 10)
-	toast_panel.position = Vector2(16, 150)
+	toast_panel.position = Vector2(16, 212)
 	toast_panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	hud_root.add_child(toast_panel)
 	toast_label = UIKit.label("", 19, Color.WHITE, 0)
@@ -286,6 +338,20 @@ func _build_ko() -> void:
 	ko_overlay.add_child(l)
 	ko_overlay.visible = false
 	add_child(ko_overlay)
+	busted_overlay = UIKit.full(Control.new())
+	busted_overlay.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var bt := ColorRect.new()
+	UIKit.full(bt)
+	bt.color = Color(0.0, 0.08, 0.3, 0.5)
+	bt.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	busted_overlay.add_child(bt)
+	var bl := UIKit.label("ARRESTATO!", 100, Color(0.45, 0.65, 1.0), 14)
+	UIKit.full(bl)
+	bl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	bl.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	busted_overlay.add_child(bl)
+	busted_overlay.visible = false
+	add_child(busted_overlay)
 
 
 # ---------------------------------------------------------------- aggiornamento
@@ -327,6 +393,21 @@ func _process(delta: float) -> void:
 	sb.set_label(sp)
 	sb.set_cooldown(clampf(p.special_cd / (12.0 if p.char_id == "mike" else 20.0), 0.0, 1.0))
 	touch.buttons["use_boost"].set_badge(str(Game.boosts) if Game.boosts > 0 else "")
+	var wdef: Dictionary = Game.WEAPONS[Game.current_weapon]
+	if Game.current_weapon == "fists":
+		weapon_label.text = "PUGNI"
+		touch.buttons["attack"].set_label("PUGNO")
+	else:
+		weapon_label.text = "%s   %d" % [wdef["name"], Game.ammo()]
+		touch.buttons["attack"].set_label("SPARA")
+	touch.buttons["weapon_next"].set_badge(str(Game.ammo()) if Game.current_weapon != "fists" else "")
+	if world.police != null:
+		stars.count = world.police.stars
+		stars.blink = world.police.stars > 0 and not world.police.seen
+	if world.mp and world.net != null:
+		score_label.text = world.net.score_text()
+	else:
+		score_label.text = ""
 	if p.in_vehicle():
 		var car: Car = p.vehicle
 		speed_panel.visible = true
@@ -370,7 +451,7 @@ func set_hud_visible(v: bool) -> void:
 func refresh_controls() -> void:
 	if touch == null:
 		return
-	if not _hud_visible or world == null or world.state != "play":
+	if not _hud_visible or world == null or world.state != "play" or _menu != null:
 		touch.set_mode("hidden")
 	elif world.lock_count > 0:
 		touch.set_mode("cutscene")
@@ -436,6 +517,16 @@ func show_message(title: String, sub: String = "", c: Color = UIKit.ACCENT, dur:
 		print("[HUD] ", title, " - ", sub)
 
 
+func flash_stars() -> void:
+	stars.flash_t = 1.5
+
+
+func show_busted(on: bool) -> void:
+	busted_overlay.visible = on
+	if on:
+		touch.set_mode("cutscene")
+
+
 func flash_damage() -> void:
 	damage_flash.color.a = 0.35
 
@@ -470,7 +561,8 @@ func show_skip(on: bool, cb: Callable) -> void:
 
 func _open_menu() -> Control:
 	close_menu()
-	get_tree().paused = true
+	# In multiplayer il mondo non si ferma mai.
+	get_tree().paused = world == null or not world.mp
 	touch.release_all()
 	Sfx.set_engine(false)
 	_menu = UIKit.full(Control.new())
@@ -494,6 +586,9 @@ func is_menu_open() -> bool:
 
 
 func open_pause() -> void:
+	if world.mp:
+		_open_mp_pause()
+		return
 	var m := _open_menu()
 	var panel := UIKit.panel()
 	UIKit.centered(m, panel)
@@ -526,6 +621,120 @@ func open_pause() -> void:
 		var b := UIKit.button(e[0], 24, Vector2(300, 60))
 		b.pressed.connect(e[1])
 		grid.add_child(b)
+
+
+func _open_mp_pause() -> void:
+	var m := _open_menu()
+	var panel := UIKit.panel()
+	UIKit.centered(m, panel)
+	var v := UIKit.vbox(10)
+	panel.add_child(v)
+	var t := UIKit.label("MULTIPLAYER LAN", 40, UIKit.ACCENT, 8)
+	t.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	v.add_child(t)
+	var info := UIKit.label(world.net.session_info() if world.net != null else "", 19, Color(0.85, 0.85, 0.9), 0)
+	info.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	v.add_child(info)
+	var grid := GridContainer.new()
+	grid.columns = 2
+	grid.add_theme_constant_override("h_separation", 12)
+	grid.add_theme_constant_override("v_separation", 10)
+	v.add_child(grid)
+	var entries := [
+		["RIPRENDI", close_menu],
+		["GIOCATORI", open_scoreboard],
+		["MAPPA", open_map],
+		["IMPOSTAZIONI", _settings_from_pause],
+		["COMANDI", _help_from_pause],
+		["ESCI DALLA PARTITA", _on_main_menu_pressed],
+	]
+	for e in entries:
+		var b := UIKit.button(e[0], 24, Vector2(300, 60))
+		b.pressed.connect(e[1])
+		grid.add_child(b)
+
+
+func open_scoreboard() -> void:
+	if world.net == null:
+		return
+	var m := _open_menu()
+	var panel := UIKit.panel()
+	UIKit.centered(m, panel)
+	var v := UIKit.vbox(8)
+	panel.add_child(v)
+	var t := UIKit.label("GIOCATORI", 38, UIKit.ACCENT, 8)
+	t.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	v.add_child(t)
+	var mode := UIKit.label(world.net.mode_text(), 20, Color(0.85, 0.85, 0.9), 0)
+	mode.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	v.add_child(mode)
+	var grid := GridContainer.new()
+	grid.columns = 4
+	grid.add_theme_constant_override("h_separation", 28)
+	v.add_child(grid)
+	for h in ["GIOCATORE", "PERSONAGGIO", "K.O. FATTI", "K.O. SUBITI"]:
+		grid.add_child(UIKit.label(h, 18, UIKit.ACCENT, 3))
+	for row in world.net.scoreboard():
+		var c: Color = Game.CHARACTERS.get(row["char"], Game.CHARACTERS["mike"])["color"]
+		grid.add_child(UIKit.label(row["name"] + ("  (tu)" if row["me"] else ""), 20, c.lightened(0.3), 3))
+		grid.add_child(UIKit.label(Game.CHARACTERS.get(row["char"], Game.CHARACTERS["mike"])["name"], 18, Color.WHITE, 3))
+		grid.add_child(UIKit.label(str(row["kills"]), 20, Color.WHITE, 3))
+		grid.add_child(UIKit.label(str(row["deaths"]), 20, Color.WHITE, 3))
+	var b := UIKit.button("CHIUDI", 22, Vector2(200, 54))
+	b.pressed.connect(close_menu)
+	var cc := CenterContainer.new()
+	cc.add_child(b)
+	v.add_child(cc)
+
+
+func open_armory() -> void:
+	var m := _open_menu()
+	var panel := UIKit.panel()
+	UIKit.centered(m, panel)
+	var v := UIKit.vbox(10)
+	panel.add_child(v)
+	var t := UIKit.label("ARMERIA DI PORT ARDENA", 36, Color(1.0, 0.6, 0.25), 8)
+	t.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	v.add_child(t)
+	var money := UIKit.label("Contanti: $%s" % _fmt_money(Game.money), 22, Color(0.45, 0.95, 0.45), 4)
+	money.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	v.add_child(money)
+	var grid := GridContainer.new()
+	grid.columns = 3
+	grid.add_theme_constant_override("h_separation", 18)
+	grid.add_theme_constant_override("v_separation", 8)
+	v.add_child(grid)
+	for id in Game.WEAPON_ORDER:
+		if id == "fists":
+			continue
+		var def: Dictionary = Game.WEAPONS[id]
+		var owned := Game.weapons.has(id)
+		grid.add_child(UIKit.label(def["name"], 22, Color.WHITE, 3))
+		grid.add_child(UIKit.label("Colpi: %d" % int(Game.weapons.get(id, 0)) if owned else "Danno %d · Gittata %dm" % [int(def["damage"]) * int(def["pellets"]), int(def["range"])], 18, Color(0.8, 0.8, 0.85), 0))
+		var price: int = def["ammo_price"] if owned else def["price"]
+		var label_text := ("MUNIZIONI +%d  $%d" % [int(def["ammo_pack"]), price]) if owned else ("COMPRA  $%d" % price)
+		var b := UIKit.button(label_text, 20, Vector2(270, 50))
+		b.disabled = Game.money < price
+		b.pressed.connect(_buy_weapon.bind(id, price))
+		grid.add_child(b)
+	var note := UIKit.label("Le armi sparano con mira automatica sul bersaglio più vicino davanti a te.", 16, Color(0.75, 0.75, 0.8), 0)
+	note.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	v.add_child(note)
+	var close := UIKit.button("ESCI DAL NEGOZIO", 22, Vector2(280, 54))
+	close.pressed.connect(close_menu)
+	var cc := CenterContainer.new()
+	cc.add_child(close)
+	v.add_child(cc)
+
+
+func _buy_weapon(id: String, price: int) -> void:
+	if Game.money < price:
+		return
+	Game.add_money(-price)
+	Game.give_weapon(id, int(Game.WEAPONS[id]["ammo_pack"]))
+	Game.equip_weapon(id)
+	Sfx.play("cash")
+	open_armory()
 
 
 func _on_save_pressed() -> void:
@@ -580,6 +789,9 @@ func open_map() -> void:
 
 
 func open_char_select() -> void:
+	if world.mp:
+		open_scoreboard()
+		return
 	if world.missions.current != null and not world.missions.current.allow_switch:
 		toast("Non puoi cambiare personaggio durante una missione.", 2.0)
 		return

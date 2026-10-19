@@ -59,6 +59,8 @@ func _run() -> void:
 	await _test_m6()
 	await _test_m7()
 	await _test_m8()
+	await _test_weapons()
+	await _test_police()
 	await _test_death()
 	await _test_save_load()
 	await _test_settings()
@@ -472,6 +474,148 @@ func _test_m8() -> void:
 	world.hud.close_menu()
 	world.player.invuln = 0.0
 	await frames(3)
+
+
+func _test_weapons() -> void:
+	section("Armi")
+	var p: Protagonist = world.player
+	if p.in_vehicle():
+		world.force_exit(p)
+	world.police.clear()
+	p.invuln = 60.0
+	p.teleport(Vector3(0, 0, -90), 0.0)
+	world.camera.yaw = 0.0
+	world.camera.snap_behind()
+	world.camera.yaw = 0.0
+	Game.confiscate_weapons()
+	check(Game.current_weapon == "fists", "Si parte a mani nude")
+	Game.give_weapon("pistol", 24)
+	check(Game.current_weapon == "pistol" and Game.ammo() == 24, "Pistola in mano con 24 colpi")
+	check(p.model.weapon_mesh != null, "Arma visibile nella mano del protagonista")
+	var e: Enemy = world.spawn_enemy("viper", Vector3(0, 0, -98), 200.0)
+	e.passive = true
+	await frames(3)
+	var hp := e.health
+	for i in 3:
+		p.fire_cd = 0.0
+		p.attack(false)
+		await frames(2)
+	check(e.health < hp, "La pistola colpisce il bersaglio con la mira automatica (%d -> %d)" % [int(hp), int(e.health)])
+	check(Game.ammo() == 21, "Munizioni consumate (%d)" % Game.ammo())
+	Game.give_weapon("shotgun", 12)
+	Game.equip_weapon("shotgun")
+	e.global_position = Vector3(0, 0.1, -94)
+	await frames(2)
+	var hp2 := e.health
+	p.fire_cd = 0.0
+	p.attack(false)
+	await frames(2)
+	check(hp2 - e.health > 15.0, "Il fucile a pompa spara più pallini (danno %d)" % int(hp2 - e.health))
+	Game.equip_weapon("pistol")
+	var nxt := Game.next_weapon()
+	check(nxt == "shotgun", "Pulsante ARMA: passa all'arma successiva (%s)" % nxt)
+	e.queue_free()
+	world.spawn_pickup("weapon", p.global_position + Vector3(0.5, 0, 0), 0.0, "smg")
+	await frames(4)
+	check(Game.weapons.has("smg"), "Mitraglietta raccolta da terra")
+	Game.add_money(5000)
+	var money := Game.money
+	world.hud.open_armory()
+	world.hud._buy_weapon("rifle", int(Game.WEAPONS["rifle"]["price"]))
+	world.hud.close_menu()
+	check(Game.weapons.has("rifle") and Game.money == money - int(Game.WEAPONS["rifle"]["price"]), "Fucile d'assalto comprato all'armeria")
+	var car: Car = world.spawn_car("sedan", Vector3(4, 0, -110), 0.0)
+	var ch := car.health
+	car.take_bullet(30.0, p, Vector3.FORWARD)
+	check(car.health < ch, "I proiettili danneggiano le auto")
+	car.queue_free()
+	world.police.clear()
+	await frames(2)
+
+
+func _test_police() -> void:
+	section("Polizia e livello di ricercato")
+	var pol: Police = world.police
+	var p: Protagonist = world.player
+	p.invuln = 0.0
+	p.health = p.max_health
+	pol.clear()
+	check(pol.stars == 0, "Nessuna stella all'inizio")
+	Game.equip_weapon("pistol")
+	p.fire_cd = 0.0
+	p.attack(false)
+	check(pol.stars == 1, "Sparare in strada: 1 stella")
+	await frames(10)
+	check(pol.cars.size() >= 1, "Arriva una pattuglia (%d)" % pol.cars.size())
+	var pc: Car = pol.cars[0] if pol.cars.size() > 0 else null
+	check(pc != null and pc.car_type == "police" and pc.model.siren_on, "Auto della polizia con sirena accesa")
+	pol.set_stars(3)
+	check(pol.stars == 3, "Crimini gravi: 3 stelle")
+	var deployed := await wait_until(func(): return pol.cops.size() >= 2, 1500)
+	check(deployed, "Gli agenti scendono dalle auto e ti inseguono a piedi (%d)" % pol.cops.size())
+	var armed := 0
+	for c in pol.cops:
+		if is_instance_valid(c) and c.gun == "pistol":
+			armed += 1
+	check(armed >= 1, "Con 3 stelle gli agenti sono armati")
+	var h0 := p.health
+	var shot := await wait_until(func(): return p.health < h0, 900)
+	check(shot, "Gli agenti sparano al protagonista (salute %d -> %d)" % [int(h0), int(p.health)])
+	p.health = p.max_health
+	p.invuln = 60.0
+	pol.set_stars(5)
+	await frames(10)
+	check(pol.heli != null, "Con 5 stelle arriva l'elicottero")
+	check(pol.cars.size() + pol.cops.size() >= 3, "Risposta massiccia della polizia (%d unità)" % (pol.cars.size() + pol.cops.size()))
+	if pol.heli != null:
+		var heli := pol.heli
+		heli.take_bullet(9999.0, p, Vector3.UP)
+		check(heli.crashing, "L'elicottero può essere abbattuto")
+	# seminare la polizia
+	pol.clear()
+	pol.set_stars(1)
+	pol._spawn_cd = 999.0
+	p.teleport(Vector3(-128.6, 0, 60), 0.0)
+	var lost := await wait_until(func(): return pol.stars == 0, 900)
+	check(lost, "Fuori dall'area di ricerca e senza essere visti: polizia seminata")
+	# arresto a 1 stella
+	pol.set_stars(1)
+	pol._spawn_cd = 999.0
+	p.invuln = 0.0
+	Game.give_weapon("pistol", 10)
+	var money := Game.money
+	var cop: Enemy = world.spawn_enemy("cop", p.global_position + Vector3(1.2, 0, 0), 60.0)
+	cop.is_cop = true
+	cop.arm("", 0.0)
+	pol.cops.append(cop)
+	var busted := await wait_until(func(): return world._respawning, 300)
+	check(busted, "Un agente ti arresta (1 stella, a piedi)")
+	await wait_until(func(): return not world._respawning, 400)
+	check(p.global_position.distance_to(CityData.POLICE_DOOR) < 3.0, "Si riparte dalla questura")
+	check(Game.current_weapon == "fists" and not Game.weapons.has("pistol"), "Armi sequestrate")
+	check(Game.money < money, "Multa pagata")
+	check(pol.stars == 0, "Stelle azzerate dopo l'arresto")
+	# riverniciatura al garage
+	pol.set_stars(2)
+	pol._spawn_cd = 999.0
+	var car: Car = world.spawn_car("sedan", CityData.GARAGE_INSIDE, -PI * 0.5)
+	world.put_in_car(p, car)
+	pol.seen = false
+	var sprayed := await wait_until(func(): return pol.stars == 0, 200)
+	check(sprayed, "Riverniciatura al garage di Gus: stelle cancellate")
+	world.force_exit(p)
+	# K.O. azzera le stelle
+	pol.set_stars(2)
+	pol._spawn_cd = 999.0
+	p.invuln = 0.0
+	p.take_damage(9999.0)
+	await wait_until(func(): return not world._respawning and not p.dead, 400)
+	check(pol.stars == 0, "Dopo il K.O. la polizia smette di cercarti")
+	pol.clear()
+	for u in pol._dismissed:
+		if is_instance_valid(u):
+			u.queue_free()
+	await frames(5)
 
 
 func _test_death() -> void:

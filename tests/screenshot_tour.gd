@@ -23,6 +23,12 @@ func shot(shot_name: String) -> void:
 	print("screenshot: ", shot_name)
 
 
+## Le stelle lampeggiano quando la polizia non ti vede: scatta nella fase accesa.
+func _stars_lit() -> void:
+	while Time.get_ticks_msec() % 520 > 90:
+		await get_tree().process_frame
+
+
 func _place(pos: Vector3, yaw: float) -> void:
 	var p: Protagonist = world.player
 	if p.in_vehicle():
@@ -54,6 +60,11 @@ func _run() -> void:
 	main.show_main_menu()
 	await frames(90)
 	await shot("01_menu_principale")
+	main.menu._show_multiplayer()
+	await frames(30)
+	await shot("01b_menu_multiplayer")
+	main.menu._show_home()
+	await frames(5)
 	# Intro completa (volo, guasto, atterraggio) con dialoghi fatti avanzare in automatico.
 	main.start_new_game()
 	var shots_taken := 0
@@ -144,6 +155,50 @@ func _run() -> void:
 	await frames(20)
 	await shot("13_pausa")
 	world.hud.close_menu()
+
+	# --- armi e polizia
+	world.switch_to("mike", true)
+	world.hud.close_menu()
+	Game.add_money(5000)
+	_place(CityData.ARMORY_POS + Vector3(0, 0, -6), PI)
+	world.hud.open_armory()
+	await frames(20)
+	await shot("15_armeria")
+	world.hud.close_menu()
+	Game.give_weapon("smg", 120)
+	Game.equip_weapon("smg")
+	world.player.invuln = 999.0
+	_place(Vector3(0, 0, -84), 0.0)
+	var foes: Array = []
+	for k in 3:
+		var e: Enemy = world.spawn_enemy("viper", Vector3(-3 + k * 3, 0, -97), 400.0)
+		e.passive = true
+		foes.append(e)
+	await frames(20)
+	for k in 14:
+		world.player.attack(true)
+		await frames(4)
+	await shot("16_sparatoria")
+	for e in foes:
+		e.queue_free()
+	world.police.set_stars(3)
+	await frames(420)
+	await _stars_lit()
+	await shot("17_polizia_3_stelle")
+	world.police.set_stars(5)
+	await frames(300)
+	if world.police.heli != null:
+		var hp: Vector3 = world.police.heli.global_position
+		var back := world.player_pos() - hp
+		back.y = 0.0
+		world.camera.mode = "cinematic_hard"
+		world.camera.cine_pos = world.player_pos() + back.normalized() * 11.0 + Vector3(0, 2.5, 0)
+		world.camera.cine_look = world.player_pos().lerp(hp, 0.45)
+		await frames(5)
+	await _stars_lit()
+	await shot("18_elicottero_5_stelle")
+	world.police.clear()
+	world.camera.snap_behind()
 
 	var intro := IntroCutscene.new()
 	intro.world = world

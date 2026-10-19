@@ -146,6 +146,23 @@ jobs:
           "$HOME/godot/godot" --headless --fixed-fps 60 --path . -- --run-tests 2>&1 | tee test-report.txt
           grep -q "0 falliti" test-report.txt
 
+      - name: Test multiplayer LAN (host + client sulla stessa macchina)
+        run: |
+          set +e
+          G="$HOME/godot/godot"
+          timeout 240 "$G" --headless --path . -- --mp-test=host --mp-port=7790 > mp-host.txt 2>&1 &
+          HOST=$!
+          sleep 4
+          timeout 240 "$G" --headless --path . -- --mp-test=client --mp-port=7790 > mp-client.txt 2>&1
+          CLIENT=$?
+          wait $HOST
+          HOSTC=$?
+          grep -E "OK|FAIL|INFO|RISULTATO" mp-host.txt mp-client.txt
+          if [ "$CLIENT" -ne 0 ] || [ "$HOSTC" -ne 0 ]; then
+            echo "::error::Test multiplayer falliti (host $HOSTC, client $CLIENT)"
+            exit 1
+          fi
+
       - name: Esporta l'APK di release
         run: |
           set -o pipefail
@@ -179,6 +196,8 @@ jobs:
             build/*.apk
             build/*.sha256
             test-report.txt
+            mp-host.txt
+            mp-client.txt
           if-no-files-found: error
           retention-days: 30
 
@@ -222,7 +241,10 @@ jobs:
           - 8 missioni della storia "La valigetta del Corvo", che inizia in volo
           - Città esplorabile con traffico, pedoni, porto e aeroporto
           - Auto guidabili, cambio protagonista, Brown Boost, salvataggi locali
-          - Comandi touch, orientamento orizzontale, nessuna connessione richiesta
+          - Armi (pistola, mitraglietta, fucile a pompa, fucile d'assalto) con mira automatica e armeria
+          - Polizia con livello di ricercato fino a 5 stelle: pattuglie, agenti, SWAT ed elicottero
+          - Multiplayer in rete locale (Wi-Fi) fino a 4 giocatori: modalità libera e deathmatch
+          - Comandi touch, orientamento orizzontale; la modalità storia non richiede connessione
 
           **Download:** [$APK](https://github.com/$REPO/releases/download/$TAG/$APK)
 

@@ -16,12 +16,14 @@ var _t := 0.0
 var _wait := 0.0
 var _full_hint := 0.0
 var revealed := false
+var weapon := ""
 
 
-func setup(w: Node, k: String, respawn_time: float = 45.0) -> void:
+func setup(w: Node, k: String, respawn_time: float = 45.0, sub: String = "") -> void:
 	world = w
 	kind = k
 	respawn = respawn_time
+	weapon = sub
 	visual = Node3D.new()
 	add_child(visual)
 	match kind:
@@ -47,6 +49,12 @@ func setup(w: Node, k: String, respawn_time: float = 45.0) -> void:
 			Gfx.add_box(visual, Vector3(0.35, 0.1, 0.08), Color(0.8, 0.7, 0.3), Vector3(0, 0.38, 0))
 			Gfx.add_box(visual, Vector3(0.92, 0.05, 0.24), Color(0.8, 0.7, 0.3), Vector3(0, 0.1, 0))
 			_ring(Color(1.0, 0.85, 0.2), 0.9)
+		"weapon":
+			var glen: float = {"pistol": 0.4, "smg": 0.6, "shotgun": 1.0, "rifle": 1.1}.get(weapon, 0.5)
+			Gfx.add_box(visual, Vector3(0.12, 0.14, glen), Color(0.15, 0.15, 0.17), Vector3.ZERO, 0.2)
+			Gfx.add_box(visual, Vector3(0.1, 0.28, 0.14), Color(0.35, 0.25, 0.15), Vector3(0, -0.14, glen * 0.25))
+			_ring(Color(1.0, 0.55, 0.15), 0.7)
+			Gfx.label3d(visual, Game.WEAPONS.get(weapon, {}).get("name", "ARMA"), Vector3(0, 0.6, 0), 40, Color(1.0, 0.75, 0.4))
 		"feather":
 			Gfx.add_box(visual, Vector3(0.12, 0.9, 0.04), Color(0.1, 0.08, 0.15), Vector3.ZERO, 0.4)
 			var vane := Gfx.add_box(visual, Vector3(0.3, 0.6, 0.03), Color(0.25, 0.12, 0.35), Vector3(0.05, 0.1, 0), 0.5)
@@ -111,6 +119,12 @@ func try_collect() -> bool:
 			Sfx.play("boost")
 			Gfx.burst(world, global_position + Vector3(0, 1.0, 0), Color(0.65, 0.4, 0.18), 26, 6.0, 0.16, 0.9)
 			Gfx.burst(world, global_position + Vector3(0, 1.0, 0), Color(1.0, 0.85, 0.4), 14, 4.0, 0.1, 0.7)
+		"weapon":
+			var def: Dictionary = Game.WEAPONS.get(weapon, {})
+			Game.give_weapon(weapon, int(def.get("ammo_pack", 10)))
+			Sfx.play("reload")
+			world.hud.toast("Raccolto: %s (+%d colpi)" % [def.get("name", "ARMA"), int(def.get("ammo_pack", 10))], 2.0)
+			Gfx.burst(world, global_position + Vector3(0, 1.0, 0), Color(1.0, 0.6, 0.2), 16, 4.0, 0.1, 0.6)
 		"feather":
 			Sfx.play("feather")
 			Gfx.burst(world, global_position + Vector3(0, 1.0, 0), Color(0.6, 0.3, 0.9), 20, 5.0, 0.12, 0.8)
