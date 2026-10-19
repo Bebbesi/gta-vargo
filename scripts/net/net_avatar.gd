@@ -70,7 +70,7 @@ func apply_state(d: Array) -> void:
 	var was_dead := dead
 	dead = d[4]
 	var weapon: String = d[5]
-	in_car = int(d[6]) >= 0
+	in_car = int(d[6]) != -1
 	health = d[11]
 	if not _has_state:
 		_has_state = true

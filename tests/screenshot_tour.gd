@@ -179,6 +179,16 @@ func _run() -> void:
 		world.player.attack(true)
 		await frames(4)
 	await shot("16_sparatoria")
+	world.set_aiming(true)
+	await frames(30)
+	for k in 3:
+		world.camera.aim_at(world.aim_point(foes[2]))
+		await frames(2)
+	world.player.fire_cd = 0.0
+	world.player.attack(false)
+	await frames(2)
+	await shot("16b_mira_manuale")
+	world.set_aiming(false)
 	for e in foes:
 		e.queue_free()
 	world.police.set_stars(3)

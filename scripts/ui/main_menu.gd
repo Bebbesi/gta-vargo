@@ -48,9 +48,9 @@ func _show_home() -> void:
 	left.anchor_right = 0.6
 	left.anchor_bottom = 0.6
 	content.add_child(left)
-	var gta := UIKit.label("GTA", 120, UIKit.ACCENT, 16)
-	left.add_child(gta)
-	var tl := UIKit.label("THREE LEGENDS", 54, Color.WHITE, 12)
+	var title := UIKit.label("APRILIA", 112, UIKit.ACCENT, 16)
+	left.add_child(title)
+	var tl := UIKit.label("SIMULATOR 2026", 54, Color.WHITE, 12)
 	left.add_child(tl)
 	var sub := UIKit.label("Mike Vargo  ·  Tom Pearl  ·  Norman Summerton", 24, Color(1.0, 0.85, 0.6), 6)
 	left.add_child(sub)
@@ -312,14 +312,14 @@ func _show_credits() -> void:
 	var t := UIKit.label("CREDITI", 38, UIKit.ACCENT, 8)
 	t.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	v.add_child(t)
-	var txt := """GTA: Three Legends — versione 1.0.0
+	var txt := """Aprilia Simulator 2026 — versione %s
 Storia, personaggi e dialoghi originali.
 Programmazione in GDScript su Godot Engine 4 (licenza MIT, godotengine.org).
 Modelli 3D low-poly, città, effetti e audio generati proceduralmente dal codice del gioco:
 nessun asset esterno o protetto da copyright.
 
-Progetto amatoriale non affiliato a Rockstar Games o Take-Two Interactive.
-I Brown Boost sono oggetti immaginari del gioco."""
+Progetto amatoriale indipendente, non affiliato a Rockstar Games, Take-Two Interactive
+o ai titolari del marchio Aprilia. I Brown Boost sono oggetti immaginari del gioco.""" % Game.VERSION
 	var l := UIKit.label(txt, 20, Color(0.95, 0.95, 0.95), 0)
 	l.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	v.add_child(l)

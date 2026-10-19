@@ -1,5 +1,5 @@
 extends Node
-## Stato globale di GTA: Three Legends: protagonisti, progressi, denaro,
+## Stato globale di Aprilia Simulator 2026: protagonisti, progressi, denaro,
 ## impostazioni e salvataggi locali (nessun servizio online).
 
 signal money_changed(value: int)
@@ -16,7 +16,7 @@ const TOTAL_MISSIONS := 8
 const KO_FEE := 100
 const BUSTED_FEE := 200
 const TOTAL_FEATHERS := 10
-const VERSION := "1.1.0"
+const VERSION := "1.2.0"
 
 const WEAPON_ORDER := ["fists", "pistol", "smg", "shotgun", "rifle"]
 ## Armi del gioco. damage per proiettile, rate = secondi tra un colpo e l'altro,
@@ -169,6 +169,7 @@ var settings: Dictionary = {
 	"touch_opacity": 0.8,
 	"vibration": true,
 	"invert_y": false,
+	"auto_aim": true,
 	"player_name": "",
 }
 
@@ -207,6 +208,7 @@ func _setup_input() -> void:
 		"pause": [KEY_ESCAPE, KEY_P],
 		"map": [KEY_M],
 		"weapon_next": [KEY_E, KEY_X],
+		"aim": [KEY_K, KEY_V],
 	}
 	for action in map:
 		if not InputMap.has_action(action):
@@ -215,6 +217,10 @@ func _setup_input() -> void:
 			var ev := InputEventKey.new()
 			ev.physical_keycode = key
 			InputMap.action_add_event(action, ev)
+	# Tasto destro del mouse per mirare (il sinistro simula il tocco).
+	var rmb := InputEventMouseButton.new()
+	rmb.button_index = MOUSE_BUTTON_RIGHT
+	InputMap.action_add_event("aim", rmb)
 
 
 func char_data(id: String) -> Dictionary:

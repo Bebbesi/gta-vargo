@@ -4,12 +4,13 @@ extends Node
 ## giocatore; fino a 3 client si collegano al suo IP. Ogni peer simula il
 ## proprio protagonista e l'auto che guida e invia lo stato agli altri
 ## 20 volte al secondo. L'host decide chi guida quale auto e tiene i punteggi.
+## Passanti, traffico e polizia sono replicati da NetWorld (nodo "Ents").
 
 const PORT := 7777
 const DISCOVERY_PORT := 7778
 const MAX_PLAYERS := 4
 const SEND_RATE := 0.05
-const MAGIC := "GTA3L"
+const MAGIC := "APRSIM26"
 
 signal players_changed
 
@@ -32,19 +33,25 @@ var _closing := false
 ## Nei test automatici la sessione non torna al menu quando si chiude.
 var stay_on_fail := false
 var _round_over := false
+var ents: NetWorld
 
 
 func start(params: Dictionary) -> void:
 	mode = str(params.get("mode", "free"))
 	port = int(params.get("port", PORT))
+	is_host = bool(params.get("host", false))
+	ents = NetWorld.new()
+	ents.name = "Ents"
+	ents.net = self
+	ents.world = world
+	add_child(ents)
 	multiplayer.peer_connected.connect(_on_peer_connected)
 	multiplayer.peer_disconnected.connect(_on_peer_disconnected)
 	multiplayer.connected_to_server.connect(_on_connected)
 	multiplayer.connection_failed.connect(_on_connection_failed)
 	multiplayer.server_disconnected.connect(_on_server_disconnected)
 	var peer := ENetMultiplayerPeer.new()
-	if bool(params.get("host", false)):
-		is_host = true
+	if is_host:
 		var err := peer.create_server(port, MAX_PLAYERS - 1)
 		if err != OK:
 			_fail("Impossibile creare la partita: la porta %d è già in uso." % port)
@@ -87,6 +94,7 @@ func _fail(msg: String) -> void:
 	if _closing:
 		return
 	_closing = true
+	connected = false
 	push_warning("[NET] " + msg)
 	print("[NET] ", msg)
 	if stay_on_fail:
@@ -118,6 +126,7 @@ func _on_peer_connected(_id: int) -> void:
 func _on_peer_disconnected(id: int) -> void:
 	var nm: String = players.get(id, {}).get("name", "Un giocatore")
 	_remove_avatar(id)
+	ents.remove_owner(id)
 	if is_host:
 		players.erase(id)
 		for nid in car_owner.keys():
@@ -238,27 +247,35 @@ func _physics_process(delta: float) -> void:
 	var cyaw := 0.0
 	var cspd := 0.0
 	var cst := 0.0
+	var ctype := ""
+	var ccol := Color.WHITE
 	if p.vehicle != null:
-		car_id = p.vehicle.net_id
+		# -2: auto propria (es. una pattuglia rubata), arriva con le entità di rete
+		car_id = p.vehicle.net_id if p.vehicle.net_id >= 0 else -2
 		cpos = p.vehicle.global_position
 		cyaw = p.vehicle.rotation.y
 		cspd = p.vehicle.speed
 		cst = p.vehicle.steer
+		ctype = p.vehicle.car_type
+		ccol = p.vehicle.paint
 	var data := [p.global_position, p.yaw, Vector2(p.velocity.x, p.velocity.z).length(), p.is_on_floor(), p.dead,
-		Game.current_weapon, car_id, cpos, cyaw, cspd, cst, p.health, p.model.aim_t > 0.0]
+		Game.current_weapon, car_id, cpos, cyaw, cspd, cst, p.health, p.model.aim_t > 0.0, ctype, ccol]
 	_state.rpc(data)
 
 
 @rpc("any_peer", "call_remote", "unreliable_ordered")
 func _state(data: Array) -> void:
 	var id := multiplayer.get_remote_sender_id()
-	if not avatars.has(id) or data.size() < 13:
+	if not avatars.has(id) or data.size() < 15:
 		return
 	var av: NetAvatar = avatars[id]
 	av.apply_state(data)
 	var car_id: int = data[6]
 	if car_id >= 0:
 		var car := world_car(car_id)
+		if car == null and not is_host:
+			# auto dell'host mai vista prima (es. traffico rubato lontano da qui)
+			car = ents.make_car_proxy(1, car_id, str(data[13]), data[14], data[7], data[8])
 		if car != null and car.driver == null:
 			if car.remote_driver != id:
 				car.remote_driver = id
@@ -315,12 +332,25 @@ func _req_car(nid: int) -> void:
 
 func _grant_car(nid: int, peer: int) -> void:
 	var owner: int = car_owner.get(nid, 0)
+	var car := world_car(nid)
+	var deny := ""
 	if owner != 0 and owner != peer and players.has(owner):
+		deny = "Quell'auto è guidata da un altro giocatore."
+	elif car != null and car.hostile and car.npc_driver:
+		deny = "Non puoi salire su un'auto della polizia in servizio."
+	if deny != "":
 		if peer == my_id:
-			world.hud.toast("Quell'auto è guidata da un altro giocatore.", 1.5)
+			world.hud.toast(deny, 1.5)
 		else:
-			_feed.rpc_id(peer, "Quell'auto è guidata da un altro giocatore.")
+			_feed.rpc_id(peer, deny)
 		return
+	if car != null and peer != my_id:
+		# un altro giocatore ruba un'auto del traffico: il conducente scende
+		if car.npc_driver:
+			world._eject_npc(car)
+		car.ai_mode = Car.AI.NONE
+		car.is_traffic = false
+		world.traffic.erase(car)
 	car_owner[nid] = peer
 	_car_owner.rpc(nid, peer)
 	_car_owner(nid, peer)
@@ -448,10 +478,33 @@ func send_shot_fx(from: Vector3, to: Vector3, weapon: String) -> void:
 
 @rpc("any_peer", "call_remote", "unreliable")
 func _shot_fx(from: Vector3, to: Vector3, weapon: String) -> void:
+	if is_host:
+		world.alert_peds(from, 30.0)
 	Gfx.tracer(world, from, to)
 	Gfx.muzzle_flash(world, from)
 	var snd: String = Game.WEAPONS.get(weapon, Game.WEAPONS["pistol"])["sound"]
 	Sfx.play_at(snd, from, world.camera.global_position, 90.0, -4.0)
+
+
+## Reato commesso da un altro giocatore contro un'entità simulata qui
+## (passante, agente, elicottero): le stelle vanno a lui.
+func send_crime(peer: int, kind: String, pos: Vector3) -> void:
+	if peer != my_id and players.has(peer):
+		_crime.rpc_id(peer, kind, pos)
+
+
+@rpc("any_peer", "call_remote", "reliable")
+func _crime(kind: String, pos: Vector3) -> void:
+	world.report_crime(kind, pos)
+
+
+## Posizione di un giocatore remoto (null se ancora sconosciuta).
+func peer_position(peer: int) -> Variant:
+	if avatars.has(peer):
+		var av: NetAvatar = avatars[peer]
+		if is_instance_valid(av) and av._has_state:
+			return av.global_position
+	return null
 
 
 # ---------------------------------------------------------------- scoperta in LAN

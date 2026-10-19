@@ -24,13 +24,15 @@ var is_cop := false
 var arrest_only := false
 var passive := false
 var fire_cd := 1.0
+var look_id := "viper"
 
 
-func setup(w: Node, look_id: String, hp: float = 60.0, title: String = "") -> void:
+func setup(w: Node, look: String, hp: float = 60.0, title: String = "") -> void:
 	world = w
+	look_id = look
 	max_health = hp
 	health = hp
-	setup_body(Game.NPC_LOOKS.get(look_id, Game.NPC_LOOKS["viper"]))
+	setup_body(Game.NPC_LOOKS.get(look, Game.NPC_LOOKS["viper"]))
 	add_to_group("enemies")
 	_orbit = 1.0 if randf() < 0.5 else -1.0
 	if title != "":
@@ -150,8 +152,8 @@ func _on_damaged(_amount: float, source: Node) -> void:
 	if gun != "":
 		stagger = 0.12
 	windup = 0.0
-	if is_cop and world.is_player_source(source):
-		world.report_crime("cop_hit", global_position)
+	if is_cop:
+		world.crime_by(source, "cop_hit", global_position)
 
 
 func _on_die(source: Node) -> void:
@@ -164,6 +166,6 @@ func _on_die(source: Node) -> void:
 		world.spawn_pickup("boost", global_position + Vector3(0, 0, 0.5), 0.0)
 	if gun != "" and randf() < 0.4:
 		world.spawn_pickup("weapon", global_position + Vector3(0.6, 0, 0), 0.0, gun)
-	if is_cop and world.is_player_source(source):
-		world.report_crime("cop_ko", global_position)
+	if is_cop:
+		world.crime_by(source, "cop_ko", global_position)
 	defeated.emit(self)

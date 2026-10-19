@@ -70,7 +70,7 @@ func _make_loading() -> Control:
 	c.add_child(bg)
 	var v := UIKit.vbox(8)
 	UIKit.centered(c, v)
-	var t := UIKit.label("GTA: THREE LEGENDS", 54, UIKit.ACCENT, 10)
+	var t := UIKit.label("APRILIA SIMULATOR 2026", 54, UIKit.ACCENT, 10)
 	t.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	v.add_child(t)
 	var l := UIKit.label("Caricamento di Port Ardena...", 24, Color.WHITE, 4)

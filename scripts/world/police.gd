@@ -4,7 +4,9 @@ extends Node
 ## I crimini aumentano il "calore"; ogni soglia è una stella. La polizia manda
 ## pattuglie (fino a 5), agenti a piedi che arrestano (1 stella) o sparano
 ## (2+), squadre SWAT (4+) e un elicottero (4+). Per seminarla bisogna uscire
-## dall'area di ricerca e restare fuori vista per qualche secondo.
+## dall'area di ricerca e restare fuori vista per qualche secondo. In
+## multiplayer ogni giocatore ha le sue stelle e la sua polizia, che gli altri
+## vedono attraverso la rete.
 
 signal stars_changed(stars: int)
 
@@ -33,11 +35,12 @@ func search_radius() -> float:
 
 
 func report(kind: String, pos: Vector3) -> void:
-	if world.mp or world.state != "play":
+	if world.state != "play":
 		return
 	match kind:
 		"shots":
-			if _shots_cd > 0.0:
+			# nel deathmatch si spara di continuo: contano solo i reati contro i PNG
+			if _shots_cd > 0.0 or (world.mp and world.net != null and world.net.mode == "deathmatch"):
 				return
 			_shots_cd = 2.0
 			heat = maxf(heat, 1.0)
@@ -124,7 +127,7 @@ func clear() -> void:
 
 
 func _physics_process(delta: float) -> void:
-	if world.state != "play" or world.mp:
+	if world.state != "play":
 		Sfx.set_siren(0.0)
 		Sfx.set_heli(0.0)
 		return

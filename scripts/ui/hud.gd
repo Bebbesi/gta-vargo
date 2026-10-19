@@ -52,8 +52,29 @@ class Stars extends Control:
 		draw_polyline(pts, Color(0, 0, 0, 0.85), 2.0, true)
 
 
+## Mirino al centro dello schermo durante la MIRA (rosso sopra un bersaglio).
+class Crosshair extends Control:
+	var on_target := false
+
+	func set_on_target(v: bool) -> void:
+		if v != on_target:
+			on_target = v
+			queue_redraw()
+
+	func _draw() -> void:
+		var c := size * 0.5
+		var col := Color(1.0, 0.22, 0.18) if on_target else Color(1, 1, 1, 0.95)
+		var sh := Color(0, 0, 0, 0.55)
+		for d: Vector2 in [Vector2.RIGHT, Vector2.LEFT, Vector2.DOWN, Vector2.UP]:
+			draw_line(c + d * 8.0, c + d * 25.0, sh, 6.0)
+			draw_line(c + d * 8.0, c + d * 25.0, col, 3.0)
+		draw_circle(c, 4.0, sh)
+		draw_circle(c, 2.6, col)
+
+
 var world: Node
 var hud_root: Control
+var crosshair: Crosshair
 var menu_layer: Control
 var touch: TouchControls
 var minimap: Minimap
@@ -108,6 +129,11 @@ func _ready() -> void:
 	_build_minimap()
 	_build_speedo()
 	_build_messages()
+	crosshair = Crosshair.new()
+	UIKit.full(crosshair)
+	crosshair.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	crosshair.visible = false
+	hud_root.add_child(crosshair)
 	touch = TouchControls.new()
 	touch.world = world
 	add_child(touch)
@@ -401,6 +427,13 @@ func _process(delta: float) -> void:
 		weapon_label.text = "%s   %d" % [wdef["name"], Game.ammo()]
 		touch.buttons["attack"].set_label("SPARA")
 	touch.buttons["weapon_next"].set_badge(str(Game.ammo()) if Game.current_weapon != "fists" else "")
+	var ab: TouchButton = touch.buttons["aim"]
+	ab.visible = touch.mode == "foot" and Game.current_weapon != "fists"
+	ab.set_highlight(world.aiming)
+	ab.set_label("MIRA" if not world.aiming else "LIBERA")
+	crosshair.visible = world.aiming
+	if world.aiming:
+		crosshair.set_on_target(bool(world.crosshair["on_target"]))
 	if world.police != null:
 		stars.count = world.police.stars
 		stars.blink = world.police.stars > 0 and not world.police.seen
@@ -865,7 +898,7 @@ func show_credits() -> void:
 	UIKit.centered(m, v)
 	var lines := [
 		["FINE", 70, UIKit.ACCENT],
-		["GTA: Three Legends", 34, Color.WHITE],
+		["Aprilia Simulator 2026", 34, Color.WHITE],
 		["La valigetta del Corvo è stata recuperata.", 24, Color(0.9, 0.9, 0.9)],
 		["Silas Crane è stato smascherato e Port Ardena è un po' più pulita.", 22, Color(0.85, 0.85, 0.85)],
 		["", 12, Color.WHITE],

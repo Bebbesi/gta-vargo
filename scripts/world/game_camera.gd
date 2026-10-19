@@ -2,7 +2,8 @@ class_name GameCamera
 extends Camera3D
 ## Telecamera in terza persona: segue il protagonista o l'auto, si ruota col
 ## trascinamento, evita i muri, trema negli urti e gestisce le transizioni
-## cinematiche (cambio personaggio, menu, scene narrative).
+## cinematiche (cambio personaggio, menu, scene narrative). Con la MIRA passa
+## a una visuale da sopra la spalla: il centro dello schermo è il mirino.
 
 var world: Node
 var yaw := 0.0
@@ -17,6 +18,12 @@ var orbit_angle := 0.0
 var _switch_t := -1.0
 var _switch_from := Vector3.ZERO
 var _switch_look_from := Vector3.ZERO
+var aiming := false
+var aim_blend := 0.0
+
+const AIM_DIST := 3.0
+const AIM_SHOULDER := 1.0
+const AIM_HEIGHT := 1.72
 
 
 func _ready() -> void:
@@ -29,10 +36,35 @@ func drag(rel: Vector2) -> void:
 	if mode != "follow":
 		return
 	var s: float = Game.settings["cam_sens"]
+	if aiming:
+		s *= 0.55
 	yaw -= rel.x * 0.006 * s
 	var inv := -1.0 if bool(Game.settings["invert_y"]) else 1.0
-	pitch = clampf(pitch - rel.y * 0.004 * s * inv, -1.2, 0.3)
+	pitch = pitch - rel.y * 0.004 * s * inv
+	_clamp_pitch()
 	last_drag = 0.0
+
+
+func _clamp_pitch() -> void:
+	pitch = clampf(pitch, -0.95, 0.8) if aiming else clampf(pitch, -1.2, 0.3)
+
+
+func set_aiming(on: bool) -> void:
+	aiming = on
+	_clamp_pitch()
+
+
+## Punta il mirino esattamente su `point` (la spalla si sposta con la
+## rotazione, quindi si affina in pochi passi).
+func aim_at(point: Vector3) -> void:
+	for i in 4:
+		var t := _aim_transform(world.player, aim_blend)
+		var d := point - t.origin
+		yaw = atan2(-d.x, -d.z)
+		pitch = atan2(d.y, Vector2(d.x, d.z).length())
+		_clamp_pitch()
+	if aim_blend >= 1.0:
+		global_transform = _aim_transform(world.player, 1.0)
 
 
 func shake(amount: float) -> void:
@@ -131,12 +163,37 @@ func _follow(delta: float, instant: bool) -> void:
 	var hit := get_world_3d().direct_space_state.intersect_ray(q)
 	if not hit.is_empty():
 		want = hit["position"] + (pivot - want).normalized() * 0.35
-	global_position = want
-	_look(pivot)
+	var want_aim := aiming and not in_car
+	aim_blend = (1.0 if want_aim else 0.0) if instant else move_toward(aim_blend, 1.0 if want_aim else 0.0, delta * 6.0)
+	if aim_blend > 0.0 and not in_car:
+		var at := _aim_transform(target, aim_blend)
+		global_transform = Transform3D(at.basis, want.lerp(at.origin, smoothstep(0.0, 1.0, aim_blend)))
+	else:
+		global_position = want
+		_look(pivot)
 	var spd_fov := 0.0
 	if in_car:
 		spd_fov = clampf(absf((target as Car).speed) / 40.0, 0.0, 1.2) * 12.0
-	fov = lerpf(fov, 70.0 + spd_fov, clampf(2.0 * delta, 0.0, 1.0))
+	var want_fov := lerpf(70.0 + spd_fov, 58.0, aim_blend)
+	fov = want_fov if instant else lerpf(fov, want_fov, clampf(6.0 * delta, 0.0, 1.0))
+
+
+## Visuale da sopra la spalla destra: l'orientamento segue yaw e pitch,
+## la posizione resta fuori dai muri.
+func _aim_transform(target: Node3D, _blend: float) -> Transform3D:
+	var b := Basis.from_euler(Vector3(pitch, yaw, 0.0))
+	var right := Vector3(b.x.x, 0.0, b.x.z).normalized()
+	var head := target.global_position + Vector3(0, AIM_HEIGHT, 0)
+	var space := get_world_3d().direct_space_state
+	var shoulder := head + right * AIM_SHOULDER
+	var hs := space.intersect_ray(PhysicsRayQueryParameters3D.create(head, shoulder, 1))
+	if not hs.is_empty():
+		shoulder = head + right * maxf(0.0, head.distance_to(hs["position"]) - 0.25)
+	var pos := shoulder + b.z * AIM_DIST
+	var hp := space.intersect_ray(PhysicsRayQueryParameters3D.create(shoulder, pos, 1))
+	if not hp.is_empty():
+		pos = hp["position"] - b.z * 0.3
+	return Transform3D(b, pos)
 
 
 func _switch(delta: float) -> void:

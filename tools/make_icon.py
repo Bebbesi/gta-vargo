@@ -30,7 +30,7 @@ while x < S - 20:
 d.rectangle((16, S - 72, S - 16, S - 40), fill=(25, 18, 40, 255))
 font_path = "/usr/share/fonts/opentype/inter/InterDisplay-Bold.otf"
 try:
-    big = ImageFont.truetype(font_path, 170)
+    big = ImageFont.truetype(font_path, 112)
     small = ImageFont.truetype(font_path, 50)
     ini = ImageFont.truetype(font_path, 60)
 except OSError:
@@ -38,8 +38,8 @@ except OSError:
 def center_text(y, text, font, fill, stroke=8):
     w = d.textlength(text, font=font)
     d.text(((S - w) / 2, y), text, font=font, fill=fill, stroke_width=stroke, stroke_fill=(10, 8, 15, 255))
-center_text(40, "GTA", big, (255, 190, 50, 255), 10)
-center_text(222, "THREE LEGENDS", small, (255, 255, 255, 255), 5)
+center_text(52, "APRILIA", big, (255, 190, 50, 255), 8)
+center_text(206, "SIMULATOR 2026", small, (255, 255, 255, 255), 5)
 for i, (col, letter) in enumerate([((235, 77, 56), "M"), ((77, 153, 242), "T"), ((115, 204, 89), "N")]):
     cx = S / 2 + (i - 1) * 120
     cy = 360

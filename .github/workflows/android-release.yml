@@ -1,6 +1,6 @@
 name: Android build & release
 
-# Compila "GTA: Three Legends" con Godot 4.4.1, esegue i test automatici,
+# Compila "Aprilia Simulator 2026" con Godot 4.4.1, esegue i test automatici,
 # esporta un APK firmato e lo pubblica come asset della GitHub Release.
 #  - push su qualsiasi branch / pull request: build + test + APK come artifact
 #  - push sul branch predefinito, tag v* o avvio manuale: anche Release + APK
@@ -42,7 +42,7 @@ jobs:
           VERSION=$(grep -oP '^config/version="\K[^"]+' project.godot)
           test -n "$VERSION"
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
-          echo "apk=GTA_Three_Legends-v$VERSION.apk" >> "$GITHUB_OUTPUT"
+          echo "apk=Aprilia_Simulator_2026-v$VERSION.apk" >> "$GITHUB_OUTPUT"
           echo "Versione: $VERSION"
 
       - name: Java 17
@@ -116,10 +116,10 @@ jobs:
             PASS=$(openssl rand -hex 16)
             echo "::add-mask::$PASS"
             keytool -genkeypair -keystore "$KEYS/test-release.keystore" -storepass "$PASS" -keypass "$PASS" \
-              -alias threelegends -keyalg RSA -keysize 2048 -validity 10000 \
-              -dname "CN=GTA Three Legends (chiave di test),O=Build CI,C=IT" > /dev/null 2>&1
+              -alias aprilia -keyalg RSA -keysize 2048 -validity 10000 \
+              -dname "CN=Aprilia Simulator 2026 (chiave di test),O=Build CI,C=IT" > /dev/null 2>&1
             echo "GODOT_ANDROID_KEYSTORE_RELEASE_PATH=$KEYS/test-release.keystore" >> "$GITHUB_ENV"
-            echo "GODOT_ANDROID_KEYSTORE_RELEASE_USER=threelegends" >> "$GITHUB_ENV"
+            echo "GODOT_ANDROID_KEYSTORE_RELEASE_USER=aprilia" >> "$GITHUB_ENV"
             echo "GODOT_ANDROID_KEYSTORE_RELEASE_PASSWORD=$PASS" >> "$GITHUB_ENV"
             echo "signing=test" >> "$GITHUB_OUTPUT"
           fi
@@ -191,7 +191,7 @@ jobs:
       - name: Carica l'APK come artifact
         uses: actions/upload-artifact@v4
         with:
-          name: GTA_Three_Legends-apk
+          name: Aprilia_Simulator_2026-apk
           path: |
             build/*.apk
             build/*.sha256
@@ -215,7 +215,7 @@ jobs:
       - name: Scarica l'APK
         uses: actions/download-artifact@v4
         with:
-          name: GTA_Three_Legends-apk
+          name: Aprilia_Simulator_2026-apk
           path: dist
 
       - name: Crea o aggiorna la release
@@ -234,16 +234,16 @@ jobs:
             FIRMA="Firmato con una chiave di TEST generata in CI (installabile; per aggiornare una versione precedente può servire disinstallarla prima)."
           fi
           cat > notes.md <<EOF
-          ## GTA: Three Legends $TAG
+          ## Aprilia Simulator 2026 $TAG
 
           Mini open world 3D per Android con **Mike Vargo**, **Tom Pearl** e **Norman Summerton**.
 
           - 8 missioni della storia "La valigetta del Corvo", che inizia in volo
           - Città esplorabile con traffico, pedoni, porto e aeroporto
           - Auto guidabili, cambio protagonista, Brown Boost, salvataggi locali
-          - Armi (pistola, mitraglietta, fucile a pompa, fucile d'assalto) con mira automatica e armeria
+          - Armi (pistola, mitraglietta, fucile a pompa, fucile d'assalto) con mira manuale (pulsante MIRA e mirino) o automatica
           - Polizia con livello di ricercato fino a 5 stelle: pattuglie, agenti, SWAT ed elicottero
-          - Multiplayer in rete locale (Wi-Fi) fino a 4 giocatori: modalità libera e deathmatch
+          - Multiplayer in rete locale (Wi-Fi) fino a 4 giocatori: modalità libera e deathmatch, con passanti, traffico e polizia
           - Comandi touch, orientamento orizzontale; la modalità storia non richiede connessione
 
           **Download:** [$APK](https://github.com/$REPO/releases/download/$TAG/$APK)
@@ -256,9 +256,9 @@ jobs:
           sed -i 's/^          //' notes.md
           if gh release view "$TAG" --repo "$REPO" > /dev/null 2>&1; then
             gh api -X PATCH "repos/$REPO/git/refs/tags/$TAG" -f sha="$GITHUB_SHA" -F force=true > /dev/null || true
-            gh release edit "$TAG" --repo "$REPO" --notes-file notes.md --title "GTA: Three Legends $TAG"
+            gh release edit "$TAG" --repo "$REPO" --notes-file notes.md --title "Aprilia Simulator 2026 $TAG"
           else
-            gh release create "$TAG" --repo "$REPO" --target "$GITHUB_SHA" --title "GTA: Three Legends $TAG" --notes-file notes.md
+            gh release create "$TAG" --repo "$REPO" --target "$GITHUB_SHA" --title "Aprilia Simulator 2026 $TAG" --notes-file notes.md
           fi
           gh release upload "$TAG" --repo "$REPO" --clobber "dist/build/$APK" "dist/build/$APK.sha256"
 

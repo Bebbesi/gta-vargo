@@ -56,6 +56,12 @@ func _physics_process(delta: float) -> void:
 	var spd: float = data["run_speed"]
 	if char_id == "mike" and special_time > 0.0:
 		spd *= 1.5
+	var aiming: bool = active and world.aiming
+	if aiming:
+		# in mira: guarda dove guarda la telecamera e si sposta di lato
+		set_yaw(lerp_angle(yaw, world.camera.yaw, clampf(delta * 18.0, 0.0, 1.0)))
+		model.aim(0.2)
+		spd *= 0.45
 	if active and world.can_control():
 		var v := Input.get_vector("move_left", "move_right", "move_forward", "move_back")
 		dir = Vector3(v.x, 0, v.y).rotated(Vector3.UP, world.camera.yaw)
@@ -63,7 +69,8 @@ func _physics_process(delta: float) -> void:
 			jump = 8.0
 	var mag := minf(dir.length(), 1.0)
 	if mag > 0.01:
-		face_dir(dir, delta)
+		if not aiming:
+			face_dir(dir, delta)
 		var walk := 0.35 if mag < 0.45 else 1.0
 		dir = dir.normalized() * spd * walk
 	move_body(delta, dir, jump)
@@ -99,16 +106,29 @@ func fire_weapon() -> void:
 		return
 	fire_cd = float(def["rate"])
 	var reach: float = def["range"]
-	var target: Node3D = world.find_aim_target(self, reach)
 	var head := global_position + Vector3(0, 1.45 * model.scale.y, 0)
 	var aim_dir: Vector3 = world.camera_flat_forward()
-	if target != null:
-		aim_dir = world.aim_point(target) - head
-	var flat := Vector3(aim_dir.x, 0, aim_dir.z)
-	if flat.length() > 0.01:
-		set_yaw(atan2(-flat.x, -flat.z))
-	aim_dir = aim_dir.normalized()
 	var origin := head + forward() * 0.6
+	if active and world.aiming:
+		# mira manuale: il colpo va dove punta il mirino al centro dello schermo
+		var ch: Dictionary = world.crosshair_target(reach)
+		var tp: Vector3 = ch["point"]
+		var flat_t := Vector3(tp.x - global_position.x, 0, tp.z - global_position.z)
+		if flat_t.length() > 0.3:
+			set_yaw(atan2(-flat_t.x, -flat_t.z))
+		origin = head + forward() * 0.6
+		aim_dir = tp - origin
+		if aim_dir.length() < 0.8 or aim_dir.normalized().dot(forward()) < -0.2:
+			aim_dir = -world.camera.global_transform.basis.z
+	else:
+		var target: Node3D = world.find_aim_target(self, reach) if bool(Game.settings["auto_aim"]) else null
+		if target != null:
+			aim_dir = world.aim_point(target) - head
+		var flat := Vector3(aim_dir.x, 0, aim_dir.z)
+		if flat.length() > 0.01:
+			set_yaw(atan2(-flat.x, -flat.z))
+		origin = head + forward() * 0.6
+	aim_dir = aim_dir.normalized()
 	model.aim(0.6)
 	var spread := tan(deg_to_rad(float(def["spread"])))
 	var dmg: float = float(def["damage"]) * (1.5 if char_id == "norman" and special_time > 0.0 else 1.0)
@@ -156,6 +176,12 @@ func punch() -> void:
 		rel2.y = 0.0
 		if rel2.length() < 2.2 and rel2.normalized().dot(fwd) > 0.3:
 			av.net_hit(dmg, "punch")
+			hit = true
+	for pup in get_tree().get_nodes_in_group("net_npcs"):
+		var rel3: Vector3 = pup.global_position - global_position
+		rel3.y = 0.0
+		if not pup.dead and rel3.length() < 2.2 and rel3.normalized().dot(fwd) > 0.3:
+			pup.take_damage(dmg, self, rel3.normalized() * (6.0 if char_id == "norman" else 3.5))
 			hit = true
 	if hit:
 		Sfx.play("punch")

@@ -41,7 +41,7 @@ func section(t: String) -> void:
 
 
 func _run() -> void:
-	print("=== GTA: Three Legends - test automatici ===")
+	print("=== Aprilia Simulator 2026 - test automatici ===")
 	if FileAccess.file_exists(Game.SAVE_PATH):
 		DirAccess.remove_absolute(ProjectSettings.globalize_path(Game.SAVE_PATH))
 	var t0 := Time.get_ticks_msec()
@@ -60,6 +60,7 @@ func _run() -> void:
 	await _test_m7()
 	await _test_m8()
 	await _test_weapons()
+	await _test_aim()
 	await _test_police()
 	await _test_death()
 	await _test_save_load()
@@ -529,6 +530,102 @@ func _test_weapons() -> void:
 	car.take_bullet(30.0, p, Vector3.FORWARD)
 	check(car.health < ch, "I proiettili danneggiano le auto")
 	car.queue_free()
+	world.police.clear()
+	await frames(2)
+
+
+func _test_aim() -> void:
+	section("Mira manuale")
+	var p: Protagonist = world.player
+	if p.in_vehicle():
+		world.force_exit(p)
+	world.police.clear()
+	p.invuln = 60.0
+	p.teleport(Vector3(0, 0, -90), 0.0)
+	world.camera.snap_behind()
+	Game.give_weapon("pistol", 60)
+	Game.equip_weapon("fists")
+	await frames(2)
+	world.set_aiming(true)
+	check(not world.aiming, "A mani nude la MIRA non si attiva")
+	Game.equip_weapon("pistol")
+	await frames(2)
+	var tc: TouchControls = world.hud.touch
+	var ab: TouchButton = tc.buttons["aim"]
+	check(ab.visible, "Pulsante MIRA visibile con un'arma in mano")
+	_touch(4, ab.center_global(), true)
+	await frames(2)
+	_touch(4, ab.center_global(), false)
+	await frames(30)
+	check(world.aiming and world.camera.aim_blend > 0.95, "MIRA attivata: visuale da sopra la spalla")
+	check(world.hud.crosshair.visible and world.camera.fov < 60.0, "Mirino al centro dello schermo e zoom (FOV %d)" % int(world.camera.fov))
+	var a: Enemy = world.spawn_enemy("viper", Vector3(-2.0, 0, -101), 300.0)
+	var b: Enemy = world.spawn_enemy("viper", Vector3(5.0, 0, -100), 300.0)
+	a.passive = true
+	b.passive = true
+	await frames(3)
+	for k in 2:
+		world.camera.aim_at(world.aim_point(a))
+		await frames(3)
+	check(world.crosshair["on_target"] and world.crosshair["node"] == a, "Il mirino diventa rosso sul bersaglio")
+	var ha := a.health
+	var hb := b.health
+	for i in 3:
+		world.camera.aim_at(world.aim_point(a))
+		p.fire_cd = 0.0
+		p.attack(false)
+		await frames(2)
+	check(a.health < ha and b.health == hb, "I colpi vanno dove punta il mirino (A %d -> %d, B intatto)" % [int(ha), int(a.health)])
+	ha = a.health
+	for k in 2:
+		world.camera.aim_at(world.aim_point(b))
+		await frames(3)
+	for i in 3:
+		world.camera.aim_at(world.aim_point(b))
+		p.fire_cd = 0.0
+		p.attack(false)
+		await frames(2)
+	check(b.health < hb and a.health == ha, "Mirando l'altro bersaglio si colpisce quello (B %d -> %d)" % [int(hb), int(b.health)])
+	hb = b.health
+	world.camera.aim_at(p.global_position + Vector3(1.5, 9.0, -12.0))
+	await frames(3)
+	for i in 3:
+		p.fire_cd = 0.0
+		p.attack(false)
+		await frames(2)
+	check(a.health == ha and b.health == hb, "Mirando il cielo non si colpisce nessuno (niente mira automatica)")
+	var yaw0 := world.camera.yaw
+	var sb: TouchButton = tc.buttons["attack"]
+	_touch(5, sb.center_global(), true)
+	_drag(5, sb.center_global() + Vector2(-90, 0), Vector2(-90, 0))
+	await frames(2)
+	_touch(5, sb.center_global() + Vector2(-90, 0), false)
+	check(absf(angle_difference(yaw0, world.camera.yaw)) > 0.1, "In mira si corregge la visuale trascinando SPARA")
+	Game.equip_weapon("fists")
+	await frames(20)
+	check(not world.aiming and world.camera.aim_blend < 0.1 and not world.hud.crosshair.visible, "Con i pugni la MIRA si chiude")
+	Game.equip_weapon("pistol")
+	Game.set_setting("auto_aim", false)
+	p.teleport(Vector3(0, 0, -90), 0.0)
+	world.camera.snap_behind()
+	world.camera.yaw = 0.0
+	a.global_position = Vector3(-4.5, 0.1, -98)
+	b.global_position = Vector3(30, 0.1, -60)
+	await frames(3)
+	ha = a.health
+	for i in 3:
+		p.fire_cd = 0.0
+		p.attack(false)
+		await frames(2)
+	check(a.health == ha, "Mira automatica disattivabile: il colpo va dritto")
+	Game.set_setting("auto_aim", true)
+	for i in 3:
+		p.fire_cd = 0.0
+		p.attack(false)
+		await frames(2)
+	check(a.health < ha, "Con la mira automatica il bersaglio laterale viene colpito")
+	a.queue_free()
+	b.queue_free()
 	world.police.clear()
 	await frames(2)
 

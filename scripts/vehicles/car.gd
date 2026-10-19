@@ -72,6 +72,11 @@ var last_hit_by: Node = null
 ## Multiplayer: indice condiviso dell'auto e peer che la sta guidando da remoto.
 var net_id := -1
 var remote_driver := 0
+## Marionetta: auto simulata da un altro peer, segue lo stato ricevuto.
+var net_puppet := false
+var puppet_owner := 0
+var puppet_player_driven := false
+var paint := Color.WHITE
 var _net_pos := Vector3.ZERO
 var _net_yaw := 0.0
 
@@ -81,6 +86,7 @@ func setup(type: String, color: Color, w: Node) -> void:
 	car_type = type if TYPES.has(type) else "sedan"
 	stats = TYPES[car_type]
 	size = stats["size"]
+	paint = color
 	max_health = stats["health"]
 	health = max_health
 	name = "Car_%s_%d" % [car_type, get_instance_id()]
@@ -115,8 +121,10 @@ func forward() -> Vector3:
 func _physics_process(delta: float) -> void:
 	impact_cd = maxf(0.0, impact_cd - delta)
 	horn_cd -= delta
-	if remote_driver != 0:
+	if remote_driver != 0 or (net_puppet and driver == null):
 		_remote_follow(delta)
+		if remote_driver == 0 and not puppet_player_driven and absf(speed) > 4.0:
+			_puppet_hits_player()
 		return
 	if wrecked:
 		speed = move_toward(speed, 0.0, 25.0 * delta)
@@ -247,8 +255,8 @@ func take_damage(amount: float, by: Node = null) -> void:
 func wreck() -> void:
 	if wrecked:
 		return
-	if world.is_player_source(last_hit_by) and driver == null:
-		world.report_crime("cop_car_destroyed" if car_type in ["police", "swat"] else "car_destroyed", global_position)
+	if driver == null:
+		world.crime_by(last_hit_by, "cop_car_destroyed" if car_type in ["police", "swat"] else "car_destroyed", global_position)
 	wrecked = true
 	health = 0.0
 	model.set_wrecked()
@@ -276,6 +284,7 @@ func take_bullet(amount: float, source: Node, _dir: Vector3) -> void:
 
 ## Nuova vernice (riverniciatura al garage): ricostruisce il modello.
 func repaint(c: Color) -> void:
+	paint = c
 	var had_driver := model.driver_head.visible
 	model.queue_free()
 	model = CarModel.new()
@@ -297,6 +306,12 @@ func repair() -> void:
 
 # ---------------------------------------------------------------- multiplayer
 
+func set_net_puppet(on: bool) -> void:
+	net_puppet = on
+	_net_pos = global_position
+	_net_yaw = rotation.y
+
+
 ## Stato ricevuto dalla rete per un'auto guidata da un altro giocatore.
 func apply_net_state(pos: Vector3, yaw: float, spd: float, st: float) -> void:
 	_net_pos = pos
@@ -316,6 +331,22 @@ func _remote_follow(delta: float) -> void:
 	model.update_visuals(delta, speed, steer)
 
 
+## Un'auto di un altro peer (traffico, polizia) che investe il giocatore
+## locale: lo rileva chi viene investito.
+func _puppet_hits_player() -> void:
+	var p: Protagonist = world.player
+	if p == null or p.dead or p.in_vehicle() or p.down_time > 0.0:
+		return
+	var rel := p.global_position - global_position
+	if rel.length_squared() > 16.0:
+		return
+	var local := global_transform.basis.inverse() * rel
+	if absf(local.x) < size.x * 0.5 + 0.35 and absf(local.z) < size.z * 0.5 + 0.35 and absf(local.y) < 2.5:
+		var side := Vector3(rel.x, 0.0, rel.z).normalized()
+		p.hit_by_car(self, absf(speed), forward() * speed * 0.6 + side * 3.0 + Vector3(0, 4.0, 0))
+		Sfx.play_at("punch", global_position, world.camera.global_position, 40.0)
+
+
 func start_nitro(t: float) -> void:
 	nitro = t
 	model.set_nitro(true)
@@ -329,6 +360,11 @@ func _hit_actors() -> void:
 			var lr: Vector3 = inv * (av.global_position - global_position)
 			if absf(lr.x) < size.x * 0.5 + 0.4 and absf(lr.z) < size.z * 0.5 + 0.4 and absf(lr.y) < 2.0:
 				av.net_hit(spd * 1.3, "car")
+		for pup in get_tree().get_nodes_in_group("net_npcs"):
+			var lp: Vector3 = inv * (pup.global_position - global_position)
+			if absf(lp.x) < size.x * 0.5 + 0.35 and absf(lp.z) < size.z * 0.5 + 0.35 and absf(lp.y) < 2.5:
+				var sd := Vector3(pup.global_position.x - global_position.x, 0.0, pup.global_position.z - global_position.z).normalized()
+				pup.hit_by_car(self, spd, forward() * speed * 0.6 + sd * 3.0 + Vector3(0, 4.0 + spd * 0.1, 0))
 	for a in get_tree().get_nodes_in_group("actors"):
 		var actor := a as Actor
 		if actor == null or actor.dead or actor.down_time > 0.0 or actor.in_vehicle():

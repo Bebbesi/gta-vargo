@@ -1,7 +1,8 @@
 class_name Helicopter
 extends Node3D
 ## Elicottero della polizia (4-5 stelle): gira attorno al giocatore e spara.
-## Può essere abbattuto con le armi.
+## Può essere abbattuto con le armi. In multiplayer quello di un altro
+## giocatore è una "marionetta" che segue la rete e inoltra i colpi.
 
 var world: Node
 var health := 320.0
@@ -15,6 +16,12 @@ var angle := 0.0
 var fire_cd := 2.5
 var _fall_speed := 0.0
 var _last_pos := Vector3.ZERO
+var puppet := false
+var net_owner := 0
+var net_eid := 0
+var ents: Node
+var _net_pos := Vector3.ZERO
+var _net_yaw := 0.0
 
 
 func setup(w: Node, pos: Vector3) -> void:
@@ -22,7 +29,9 @@ func setup(w: Node, pos: Vector3) -> void:
 	global_position = pos
 	_last_pos = pos
 	angle = randf() * TAU
+	_net_pos = pos
 	add_to_group("aim_targets")
+	add_to_group("helis")
 	var b := MeshBatch.new()
 	var navy := Color(0.12, 0.16, 0.3)
 	var white := Color(0.92, 0.92, 0.94)
@@ -68,6 +77,10 @@ func aim_point() -> Vector3:
 func take_bullet(amount: float, source: Node, _dir: Vector3) -> void:
 	if crashing:
 		return
+	if puppet:
+		Gfx.burst(world, global_position, Color(1.0, 0.9, 0.6), 6, 4.0, 0.08, 0.3)
+		ents.hit_entity(net_owner, net_eid, amount, "shot", _dir)
+		return
 	health -= amount
 	Gfx.burst(world, global_position, Color(1.0, 0.9, 0.6), 6, 4.0, 0.08, 0.3)
 	if health <= 0.0:
@@ -76,13 +89,27 @@ func take_bullet(amount: float, source: Node, _dir: Vector3) -> void:
 		Sfx.play_at("explosion", global_position, world.camera.global_position, 200.0, 2.0)
 		Gfx.burst(world, global_position, Color(1.0, 0.5, 0.1), 30, 8.0, 0.3, 1.0)
 		if world.is_player_source(source):
-			world.report_crime("heli_down", global_position)
 			world.hud.toast("Elicottero abbattuto!", 2.0)
+		world.crime_by(source, "heli_down", global_position)
+
+
+## Stato ricevuto dalla rete (elicottero di un altro giocatore).
+func apply_net(pos: Vector3, yaw: float, is_crashing: bool) -> void:
+	_net_pos = pos
+	_net_yaw = yaw
+	if is_crashing and not crashing:
+		crashing = true
+		remove_from_group("aim_targets")
+		Gfx.burst(world, global_position, Color(1.0, 0.5, 0.1), 30, 8.0, 0.3, 1.0)
 
 
 func _physics_process(delta: float) -> void:
 	rotor.rotation.y += delta * (14.0 if crashing else 26.0)
 	tail_rotor.rotation.x += delta * 30.0
+	if puppet:
+		global_position = global_position.lerp(_net_pos, clampf(delta * 8.0, 0.0, 1.0))
+		rotation.y = lerp_angle(rotation.y, _net_yaw, clampf(delta * 8.0, 0.0, 1.0))
+		return
 	if crashing:
 		_fall_speed += 14.0 * delta
 		global_position.y -= _fall_speed * delta

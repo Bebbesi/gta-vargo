@@ -1,17 +1,18 @@
-# GTA: Three Legends
+# Aprilia Simulator 2026
 
-Mini open world 3D per **Android** realizzato con **Godot 4.4 (GDScript)**, ispirato alle meccaniche classiche dei GTA ma semplice, leggero e pensato per lo smartphone.
+Mini open world 3D per **Android** realizzato con **Godot 4.4 (GDScript)**, ispirato ai classici giochi open world d'azione ma semplice, leggero e pensato per lo smartphone.
 
-Tre protagonisti realmente giocabili, una storia originale che comincia in volo, 8 missioni, auto guidabili, traffico, pedoni, **armi**, **polizia con livello di ricercato fino a 5 stelle**, **multiplayer in rete locale** (fino a 4 giocatori), salute con i *Brown Boost*, salvataggi locali e comandi touch.
+Tre protagonisti realmente giocabili, una storia originale che comincia in volo, 8 missioni, auto guidabili, traffico, pedoni, **armi con mira manuale**, **polizia con livello di ricercato fino a 5 stelle**, **multiplayer in rete locale** (fino a 4 giocatori, con passanti, traffico e polizia), salute con i *Brown Boost*, salvataggi locali e comandi touch.
 
 > **Download:** l'APK firmato viene pubblicato automaticamente nelle [GitHub Release](../../releases/latest) dalla pipeline di GitHub Actions.
 
 | | |
 |---|---|
 | ![Menu principale](docs/screenshots/menu.jpg) | ![Il volo AR-77](docs/screenshots/volo.jpg) |
-| ![Sparatoria](docs/screenshots/sparatoria.jpg) | ![Armeria](docs/screenshots/armeria.jpg) |
+| ![Mira manuale](docs/screenshots/mira.jpg) | ![Armeria](docs/screenshots/armeria.jpg) |
 | ![Polizia, 3 stelle](docs/screenshots/polizia.jpg) | ![Elicottero, 5 stelle](docs/screenshots/elicottero.jpg) |
-| ![Menu multiplayer](docs/screenshots/multiplayer_menu.jpg) | ![Partita in rete locale](docs/screenshots/multiplayer.jpg) |
+| ![Multiplayer: passanti dell'host](docs/screenshots/multiplayer.jpg) | ![Multiplayer: la polizia del client](docs/screenshots/multiplayer_polizia.jpg) |
+| ![Menu multiplayer](docs/screenshots/multiplayer_menu.jpg) | ![Sparatoria](docs/screenshots/sparatoria.jpg) |
 | ![Guida](docs/screenshots/guida.jpg) | ![Il rifugio](docs/screenshots/rifugio.jpg) |
 | ![La sfida di Norman](docs/screenshots/sfida_norman.jpg) | ![Cambio protagonista](docs/screenshots/cambio_personaggio.jpg) |
 
@@ -27,7 +28,7 @@ Tre protagonisti realmente giocabili, una storia originale che comincia in volo,
 | **Tom Pearl** | Lo stratega | Guadagna il 25% in più dalle missioni | **ANALISI**: spegne le telecamere vicine e rivela le piume nascoste |
 | **Norman Summerton** | Il lottatore | 150 di salute, pugni devastanti | **FURIA**: onda d'urto, danni doppi e metà dei danni subiti |
 
-Si passa da uno all'altro in qualsiasi momento fuori dalle missioni (pulsante **CAMBIA**, con una transizione aerea alla GTA V). Ogni protagonista resta dove lo si è lasciato.
+Si passa da uno all'altro in qualsiasi momento fuori dalle missioni (pulsante **CAMBIA**, con una transizione aerea dall'alto). Ogni protagonista resta dove lo si è lasciato.
 
 ## La storia: "La valigetta del Corvo"
 
@@ -62,7 +63,9 @@ Ogni missione ha un punto di inizio sulla mappa (lettera **S**, **M**, **T**, **
 | **Fucile d'assalto** | 19 | 70 m | alta (8 colpi/s) | $2500 (+60 colpi $150) |
 
 - Si comprano all'**Armeria di Port Ardena**, vicino al mercato (icona **$** sulla minimappa), e si trovano anche in 8 punti della città o cadute dagli agenti.
-- **Mira automatica** sul bersaglio più vicino davanti a te (nemici, agenti, auto, elicottero, altri giocatori), con un segnalino rosso sopra la testa; tieni premuto **SPARA** per sparare di continuo.
+- **Mira manuale**: il pulsante **MIRA** (tasto destro del mouse, K o V su PC) passa alla visuale da sopra la spalla con un **mirino** al centro dello schermo. Il colpo va esattamente dove punta il mirino, che diventa rosso sopra un bersaglio. Si mira trascinando sulla parte destra dello schermo, anche con lo stesso dito che tiene premuto **SPARA**; in mira il personaggio si sposta di lato e lo zoom aumenta. Un lieve aiuto aggancia i bersagli che il mirino sfiora (entro 2,5°). Ripremi il pulsante (ora **LIBERA**) per uscire.
+- **Mira automatica** quando non usi la MIRA: il colpo va al bersaglio più vicino davanti a te (nemici, agenti, auto, elicottero, altri giocatori), indicato da un segnalino rosso. Si può disattivare nelle impostazioni (*Mira automatica (senza MIRA)*): allora si spara dritto davanti.
+- Tieni premuto **SPARA** per sparare di continuo.
 - Il pulsante **ARMA** passa all'arma successiva e mostra le munizioni rimaste. Proiettili tracciati, fiammate, scintille e suoni sintetizzati per ogni arma.
 - Armi e munizioni vengono salvate con la partita.
 
@@ -94,7 +97,17 @@ Fino a **4 giocatori** sulla stessa rete Wi-Fi (o hotspot), senza server esterni
    - **Deathmatch**: vince chi arriva per primo a **10 K.O.**; dopo 8 secondi riparte un nuovo round.
 3. Gli altri trovano la partita nell'elenco *Partite trovate sulla rete* (ricerca automatica) e la toccano per entrare. Se non compare, si collegano scrivendo l'**IP dell'host** (l'host lo legge nella schermata multiplayer alla voce *il tuo IP* e nel menu di pausa) e premendo **CONNETTI**. Tutti devono avere la stessa versione del gioco.
 
-Funzioni sincronizzate: posizione, animazioni, arma in mano e salute di ogni giocatore, colpi d'arma e pugni, K.O. e ricomparsa, punteggi (classifica con il pulsante **CAMBIA** o dalla pausa, voce **GIOCATORI**), auto guidabili da tutti (ogni auto ha un solo guidatore alla volta, assegnato dall'host). In multiplayer non ci sono missioni, traffico, passanti né polizia; le auto non si distruggono. Se l'host esce, la partita termina per tutti.
+Funzioni sincronizzate: posizione, animazioni, arma in mano, mira e salute di ogni giocatore, colpi d'arma e pugni, K.O. e ricomparsa, punteggi (classifica con il pulsante **CAMBIA** o dalla pausa, voce **GIOCATORI**), auto guidabili da tutti (ogni auto ha un solo guidatore alla volta, assegnato dall'host).
+
+**Passanti, traffico e polizia anche in multiplayer.**
+- L'host simula passanti e traffico attorno a tutti i giocatori e li invia agli altri, che li vedono camminare e guidare.
+- Si possono colpire, investire e spaventare. Le auto del traffico si possono rubare: il conducente scende sullo schermo di tutti.
+- Ogni giocatore ha **le sue stelle** e la sua polizia (pattuglie, agenti, SWAT ed elicottero), che lo insegue e gli spara; gli altri la vedono e possono colpirla.
+- Chi commette un reato riceve le stelle anche se il bersaglio è simulato da un altro dispositivo. Per esempio, colpire un agente della polizia di un amico fa salire le tue stelle.
+- Nel deathmatch gli spari tra giocatori non attirano la polizia; i reati contro passanti e agenti sì.
+- Se ti arrestano in multiplayer non paghi multe: perdi le armi e riparti dalla Questura con una pistola.
+
+Restano escluse le missioni; in multiplayer le auto non si distruggono. Se l'host esce, la partita termina per tutti.
 
 Dettagli tecnici: ENet di Godot sulla porta **UDP 7777** (l'host è anche server), annunci di scoperta in broadcast sulla porta **UDP 7778**. L'APK chiede i permessi `INTERNET`, `ACCESS_NETWORK_STATE`, `ACCESS_WIFI_STATE` e `CHANGE_WIFI_MULTICAST_STATE`. Alcune reti (Wi-Fi pubbliche o con "isolamento client") bloccano il traffico tra dispositivi: in quel caso usa un hotspot.
 
@@ -111,13 +124,14 @@ Ogni protagonista ha la sua barra della salute. I **Brown Boost** (oggetti marro
 **Touch (Android, orientamento orizzontale)**
 - Joystick virtuale a sinistra: muoviti; in auto sterzi.
 - Trascina sulla parte destra dello schermo: ruoti la visuale.
-- A piedi: **PUGNO/SPARA** (tieni premuto per il fuoco automatico), **ARMA**, **SALTA**, **ENTRA/AUTO**, abilità speciale, **BOOST**, **CAMBIA** (in multiplayer: classifica), pausa.
+- A piedi: **PUGNO/SPARA** (tieni premuto per il fuoco automatico), **MIRA/LIBERA** (con un'arma in mano), **ARMA**, **SALTA**, **ENTRA/AUTO**, abilità speciale, **BOOST**, **CAMBIA** (in multiplayer: classifica), pausa.
+- In mira: trascina a destra (o sul pulsante SPARA mentre lo tieni premuto) per spostare il mirino.
 - In auto: **GAS**, **FRENO** (tienilo premuto per la retromarcia), **ESCI**, **NITRO/speciale**, **CLACSON**, **BOOST**.
 - Tasto "indietro" di Android: pausa.
 
-**Tastiera (per provare su PC)**: WASD/frecce per muoverti e guidare, Spazio salta, J o Ctrl pugno/spara, E o X cambia arma, F entra/esci, R speciale, B Brown Boost, Tab/Q cambia personaggio (1-2-3 diretto), H clacson, M mappa, Esc pausa.
+**Tastiera (per provare su PC)**: WASD/frecce per muoverti e guidare, Spazio salta, J o Ctrl pugno/spara, tasto destro del mouse, K o V mira, E o X cambia arma, F entra/esci, R speciale, B Brown Boost, Tab/Q cambia personaggio (1-2-3 diretto), H clacson, M mappa, Esc pausa.
 
-Menu: principale (Continua, Nuova partita, Multiplayer LAN, Impostazioni, Come si gioca, Crediti), pausa (Mappa, Salva, Carica, Impostazioni, Menu principale; in multiplayer Giocatori ed Esci dalla partita), impostazioni (volumi, qualità grafica, sensibilità, opacità comandi, inversione asse, vibrazione, FPS).
+Menu: principale (Continua, Nuova partita, Multiplayer LAN, Impostazioni, Come si gioca, Crediti), pausa (Mappa, Salva, Carica, Impostazioni, Menu principale; in multiplayer Giocatori ed Esci dalla partita), impostazioni (volumi, qualità grafica, sensibilità, opacità comandi, inversione asse, vibrazione, mira automatica, FPS).
 
 ## Tecnica e ottimizzazione
 
@@ -127,6 +141,7 @@ Menu: principale (Continua, Nuova partita, Multiplayer LAN, Impostazioni, Come s
 - Tre livelli di qualità (ombre, distanza visiva, densità del traffico, MSAA).
 - Audio procedurale (effetti, spari, sirene, rotore, motore, musica originale sintetizzata in un thread).
 - Multiplayer con le API di rete di alto livello di Godot (`ENetMultiplayerPeer` e `@rpc`): stato dei giocatori a 20 Hz con interpolazione, l'host assegna le auto e tiene i punteggi.
+- Personaggi non giocanti in rete (`NetWorld`): ogni dispositivo simula le proprie entità (l'host passanti e traffico, ciascuno la sua polizia) e le invia 10 volte al secondo solo a chi si trova entro 210 m. Gli altri le mostrano come "marionette" interpolate; i colpi alle marionette vanno al proprietario, che applica il danno e rimanda il reato a chi ha sparato.
 - Salvataggi in JSON (`user://savegame.json`) e impostazioni in `user://settings.cfg`. Nessun servizio online: la rete serve solo al multiplayer locale.
 - APK per `arm64-v8a` e `armeabi-v7a`, minSdk 21, target 34.
 
@@ -141,21 +156,28 @@ scripts/
               game_camera.gd, pickup.gd, props.gd, security_cam.gd
   actors/     actor.gd, protagonist.gd, pedestrian.gd, enemy.gd (anche agenti e SWAT), character_model.gd
   vehicles/   car.gd (fisica arcade + IA), car_model.gd, helicopter.gd
-  net/        net_session.gd (host/client ENet, RPC), net_avatar.gd, lan_discovery.gd
+  net/        net_session.gd (host/client ENet, RPC), net_world.gd (passanti, traffico e polizia in rete),
+              net_puppet.gd, net_avatar.gd, lan_discovery.gd
   missions/   mission.gd, mission_manager.gd, m1 ... m8
   story/      story_text.gd (dialoghi), intro_cutscene.gd (volo iniziale)
   ui/         hud.gd, touch_controls.gd, touch_button.gd, minimap.gd, dialogue_box.gd, menus.gd, main_menu.gd, ui_kit.gd
   util/       mesh_batch.gd, chunked_batch.gd, gfx.gd
-tests/        test_runner.gd (134 controlli end-to-end), mp_test.gd (multiplayer con due processi), screenshot_tour.gd
+tests/        test_runner.gd (146 controlli end-to-end), mp_test.gd (multiplayer con due processi), screenshot_tour.gd
 tools/        make_icon.py
 .github/workflows/android-release.yml
 ```
 
 ## Test automatici
 
-Il gioco include una suite che gira dentro il motore vero (scene, fisica, IA) e verifica: mondo, traffico e pedoni; cambio dei tre protagonisti e abilità; Brown Boost (raccolta, scorta, uso); comandi touch (pulsanti, joystick, visuale); guida (entrata, accelerazione, sterzo, frenata, uscita, furto); collisioni con edifici e tra veicoli; tutte le 8 missioni dall'inizio alla fine; K.O. e ritorno al checkpoint; salvataggio e caricamento; impostazioni; **armi** (mira automatica, danni di pistola e fucile a pompa, munizioni, cambio arma, raccolta da terra, acquisto all'armeria, danni alle auto); **polizia** (1, 3 e 5 stelle, pattuglie, agenti a piedi armati, elicottero abbattibile, seminare, arresto con multa e sequestro, riverniciatura, K.O.).
+Il gioco include una suite che gira dentro il motore vero (scene, fisica, IA) e verifica: mondo, traffico e pedoni; cambio dei tre protagonisti e abilità; Brown Boost (raccolta, scorta, uso); comandi touch (pulsanti, joystick, visuale); guida (entrata, accelerazione, sterzo, frenata, uscita, furto); collisioni con edifici e tra veicoli; tutte le 8 missioni dall'inizio alla fine; K.O. e ritorno al checkpoint; salvataggio e caricamento; impostazioni; **armi** (mira automatica, danni di pistola e fucile a pompa, munizioni, cambio arma, raccolta da terra, acquisto all'armeria, danni alle auto); **mira manuale** (pulsante MIRA, visuale e mirino, colpo dove punta il mirino e non sul bersaglio vicino, mirino rosso sul bersaglio, correzione trascinando SPARA, uscita passando ai pugni, mira automatica disattivabile); **polizia** (1, 3 e 5 stelle, pattuglie, agenti a piedi armati, elicottero abbattibile, seminare, arresto con multa e sequestro, riverniciatura, K.O.).
 
-Il test del **multiplayer** avvia due istanze reali del gioco che si collegano via ENet: il client trova la partita con la ricerca automatica, si muove, mette K.O. l'host con la pistola, guida un'auto sincronizzata e la rilascia; l'host verifica tutto dal suo lato.
+Il test del **multiplayer** avvia due istanze reali del gioco che si collegano via ENet, poi:
+- il client trova la partita con la ricerca automatica e vede passanti e traffico dell'host che si muovono;
+- colpisce un passante dell'host e riceve le stelle;
+- mette K.O. l'host con la pistola;
+- ruba un'auto del traffico (sull'host il conducente scende) e la rilascia;
+- chiama la propria polizia;
+- l'host vede pattuglie e agenti del client, colpisce un agente con la mira manuale e riceve a sua volta le stelle.
 
 ```bash
 godot --headless --path . --import
@@ -176,7 +198,7 @@ godot --headless --path . -- --mp-test=client --mp-port=7790
 export GODOT_ANDROID_KEYSTORE_RELEASE_PATH=/percorso/release.keystore
 export GODOT_ANDROID_KEYSTORE_RELEASE_USER=alias
 export GODOT_ANDROID_KEYSTORE_RELEASE_PASSWORD=password
-godot --headless --path . --export-release "Android" build/GTA_Three_Legends.apk
+godot --headless --path . --export-release "Android" build/Aprilia_Simulator_2026.apk
 ```
 
 ## Build e pubblicazione automatica (GitHub Actions)
@@ -187,7 +209,7 @@ Il workflow `.github/workflows/android-release.yml`:
 3. importa il progetto ed esegue i **test automatici** e il **test multiplayer** con due processi (la build si ferma se un test fallisce);
 4. esporta l'**APK di release firmato**;
 5. verifica che l'APK esista, non sia vuoto, sia firmato correttamente e contenga le librerie;
-6. lo pubblica come asset della **GitHub Release `v<versione>`** (versione letta da `project.godot`, oggi `v1.1.0`);
+6. lo pubblica come asset della **GitHub Release `v<versione>`** (versione letta da `project.godot`, oggi `v1.2.0`);
 7. controlla che l'asset sia davvero presente e scaricabile e scrive nel riepilogo il link alla release e il link diretto all'APK.
 
 Su ogni push e pull request vengono eseguiti build, test e verifica, e l'APK è disponibile come artifact. La release si aggiorna sui push al branch predefinito, sui tag `v*` o con l'avvio manuale (*Run workflow*).
@@ -202,7 +224,7 @@ Per una firma di release stabile, aggiungi questi **secrets** al repository (*Se
 | `ANDROID_KEYSTORE_ALIAS` | alias della chiave |
 | `ANDROID_KEYSTORE_PASSWORD` | password del keystore e della chiave |
 
-Per creare un keystore: `keytool -genkeypair -v -keystore release.keystore -alias threelegends -keyalg RSA -keysize 2048 -validity 10000`.
+Per creare un keystore: `keytool -genkeypair -v -keystore release.keystore -alias aprilia -keyalg RSA -keysize 2048 -validity 10000`.
 
 Se i secrets mancano, la pipeline **non si blocca**: firma l'APK con una chiave di test generata al momento (l'APK è installabile) e lo segnala con un avviso nel log e nelle note della release. Nessuna password o chiave è salvata nel codice sorgente.
 
@@ -210,4 +232,4 @@ Se i secrets mancano, la pipeline **non si blocca**: firma l'APK con una chiave 
 
 ## Note legali
 
-Personaggi, storia, dialoghi, grafica e audio sono originali e generati dal codice del progetto. Godot Engine è distribuito con licenza MIT. "GTA" è un marchio di Take-Two Interactive / Rockstar Games: questo è un progetto amatoriale non affiliato. Prima di distribuirlo pubblicamente (es. sul Play Store) è consigliabile usare un titolo diverso. I *Brown Boost* sono oggetti immaginari del gioco.
+Personaggi, storia, dialoghi, grafica e audio sono originali e generati dal codice del progetto. Godot Engine è distribuito con licenza MIT. Progetto amatoriale indipendente, non affiliato a Rockstar Games / Take-Two Interactive né ai titolari del marchio "Aprilia". Prima di distribuirlo pubblicamente (es. sul Play Store) conviene verificare che il titolo non crei conflitti con marchi registrati. I *Brown Boost* sono oggetti immaginari del gioco.

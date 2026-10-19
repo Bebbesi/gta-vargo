@@ -19,21 +19,31 @@ var flee_time := 0.0
 var flee_from := Vector3.ZERO
 var ko_time := 0.0
 var _sleep := false
+## Seme dell'aspetto: in multiplayer gli altri giocatori ricostruiscono lo
+## stesso pedone a partire da questo numero.
+var look_seed := 0
+
+
+static func make_look(look_seed_value: int) -> Dictionary:
+	var r := RandomNumberGenerator.new()
+	r.seed = look_seed_value
+	return {
+		"jacket": LOOK_JACKETS[r.randi() % LOOK_JACKETS.size()],
+		"shirt": Color(0.95, 0.95, 0.92),
+		"pants": [Color(0.2, 0.25, 0.4), Color(0.3, 0.3, 0.3), Color(0.5, 0.42, 0.3), Color(0.15, 0.15, 0.17)][r.randi() % 4],
+		"skin": LOOK_SKINS[r.randi() % LOOK_SKINS.size()],
+		"hair": LOOK_HAIR[r.randi() % LOOK_HAIR.size()],
+		"shoes": Color(0.12, 0.1, 0.1),
+		"hair_style": STYLES[r.randi() % STYLES.size()],
+		"extra": "",
+		"scale": r.randf_range(0.9, 1.06),
+	}
 
 
 func setup(w: Node, rng: RandomNumberGenerator) -> void:
 	world = w
-	var look := {
-		"jacket": LOOK_JACKETS[rng.randi() % LOOK_JACKETS.size()],
-		"shirt": Color(0.95, 0.95, 0.92),
-		"pants": [Color(0.2, 0.25, 0.4), Color(0.3, 0.3, 0.3), Color(0.5, 0.42, 0.3), Color(0.15, 0.15, 0.17)][rng.randi() % 4],
-		"skin": LOOK_SKINS[rng.randi() % LOOK_SKINS.size()],
-		"hair": LOOK_HAIR[rng.randi() % LOOK_HAIR.size()],
-		"shoes": Color(0.12, 0.1, 0.1),
-		"hair_style": STYLES[rng.randi() % STYLES.size()],
-		"extra": "",
-		"scale": rng.randf_range(0.9, 1.06),
-	}
+	look_seed = rng.randi()
+	var look := make_look(look_seed)
 	max_health = 40.0
 	health = max_health
 	walk_speed = rng.randf_range(1.3, 2.0)
@@ -56,7 +66,7 @@ func flee(from: Vector3, t: float = 6.0) -> void:
 
 
 func _physics_process(delta: float) -> void:
-	var far := global_position.distance_squared_to(world.player_pos()) > 120.0 * 120.0
+	var far: bool = world.nearest_player_distance(global_position) > 120.0
 	if far != _sleep:
 		_sleep = far
 		model.visible = not far
@@ -104,13 +114,11 @@ func _nearest_corner() -> void:
 
 func _on_die(source: Node) -> void:
 	super._on_die(source)
-	if world.is_player_source(source):
-		world.report_crime("ped_ko", global_position)
+	world.crime_by(source, "ped_ko", global_position)
 
 
 func _on_damaged(_amount: float, source: Node) -> void:
-	if world.is_player_source(source):
-		world.report_crime("assault", global_position)
+	world.crime_by(source, "assault", global_position)
 	if source is Node3D:
 		flee((source as Node3D).global_position, 8.0)
 	else:
